@@ -1,0 +1,244 @@
+import { PipelineStage } from "mongoose";
+import { log } from "../../../logger";
+import { Bcrypt } from "../../Utils/bcrypt";
+import { isDataExists } from "../../common/types/mongoose.types";
+import { ResponseBuilder } from "../../helpers/responseBuilder";
+import { AccountType, LoginType } from "./authEnum";
+import { loginModel } from "./authValidator/login";
+import { signupModel } from "./authValidator/signup";
+import * as l10n from "jm-ez-l10n";
+import JWT from "../../Utils/jwt";
+import { googleLoginModel } from "./authValidator/googleSignIn";
+import user from "../../model/user.schema";
+import { SendEmail } from "../../Utils/sendEmail";
+import { CONSTANCE, NetquixImage } from "../../config/constance";
+import { stripeHelperController } from "../stripe/stripeHelperController";
+import admin_setting from "../../model/default_admin_setting.schema";
+const stripe = require("stripe")(process.env.STRIPE_SECRET);
+
+
+export class AuthService {
+  public log = log.getLogger();
+  public bcrypt = new Bcrypt();
+  public JWT = new JWT();
+
+  public createNewUser = async (
+    createUser: signupModel
+  ): Promise<ResponseBuilder> => {
+    this.log.info(createUser);
+    let hashPassword: string;
+    let account: any;
+    if (createUser.password) {
+      hashPassword = await this.bcrypt.getHashedPassword(createUser.password);
+    }
+
+    if (createUser.account_type === AccountType.TRAINER) {
+      account = await stripeHelperController.createAccount(createUser);
+    } else if (createUser.account_type === AccountType.TRAINEE) {
+      account = await stripeHelperController.createCustomer(createUser);
+    }
+
+    const global_commission = await admin_setting.findOne();
+
+    const updateduserObj = {
+      ...createUser,
+      password: createUser.password ? hashPassword : null,
+      login_type: Boolean(createUser.isGoogleRegister)
+        ? LoginType.GOOGLE
+        : LoginType.DEFAULT,
+      is_registered_with_stript: account?.id ? true : false,
+      stripe_account_id: account?.id,
+      commission: global_commission?.commission ?? 0,
+    };
+
+    delete createUser.isGoogleRegister;
+
+    const userObj = new user(updateduserObj);
+    await userObj.save();
+
+    SendEmail.sendRawEmail(
+      null,
+      "",
+      [createUser.email],
+      "Welcome to NetQwix's Training Portal",
+      null,
+      `<div style="font-family: Verdana,Arial,Helvetica,sans-serif;font-size: 18px;line-height: 30px;">
+        Welcome  <i  style='color:#aebf76'>${createUser.fullname}</i>
+        <br/><br/>
+        Thank you for joining NetQwix Training Team. We look forward to you using this platform
+        to connect with new NetQwix Team Members.
+        <br/><br/>
+        Please <u style='color:#aebf76'><a href=${process.env.FRONTEND_URL}>click here</a></u> 
+        to log in and set up your Trainer Profile and set your Schedule Availability.
+        <br/><br/>
+        Team NetQwix. 
+        <br/>
+        <img src=${NetquixImage.logo} width='100px' height='100px'/>
+        </div> `
+    );
+
+    return ResponseBuilder.data(userObj, l10n.t("USER_CREATED_SUCCESS"));
+  };
+
+  public getUser = async (newUser: loginModel) => {
+    try {
+      const { email } = newUser;
+      if (!email) {
+        return ResponseBuilder.badRequest("Email is required.");
+      }
+      return await user.findOne({ email }).select('+password');
+    } catch (err) {
+      return ResponseBuilder.error(err, l10n.t("ERR_INTERNAL_SERVER"));
+    }
+  };
+
+  public login = async (user: loginModel): Promise<ResponseBuilder> => {
+    try {
+      const { email, password } = user;
+      if (!email) {
+        return ResponseBuilder.badRequest("Email is required.");
+      }
+      if (!password) {
+        return ResponseBuilder.badRequest("Password is required.");
+      }
+      const userDetails: any = await this.getUser(user);
+      if (userDetails) {
+        const validPassword = await this.bcrypt.comparePassword(
+          password,
+          userDetails.password
+        );
+        if (validPassword) {
+          const payload = {
+            user_id: userDetails._id,
+            account_type: userDetails.account_type,
+          };
+          const access_token = this.JWT.signJWT(payload);
+          //TODO: Store access_token in DB
+          return ResponseBuilder.data(
+            { data: { access_token, account_type: userDetails.account_type } },
+            l10n.t("LOGIN_SUCCESSFULL")
+          );
+        } else {
+          return ResponseBuilder.badRequest(l10n.t("INVALID_CREDENTIAL"));
+        }
+      } else {
+        return ResponseBuilder.badRequest(l10n.t("INVALID_CREDENTIAL"));
+      }
+    } catch (err) {
+      return ResponseBuilder.error(err, l10n.t("ERR_INTERNAL_SERVER"));
+    }
+  };
+
+  public isUserExists = async (newUser: signupModel): Promise<isDataExists> => {
+    try {
+      if (!newUser.email) {
+        ResponseBuilder.badRequest("Email is required.");
+      }
+      this.log.info(newUser);
+      return await user.exists({
+        email: newUser.email,
+      });
+    } catch (error) {
+      ResponseBuilder.error(error, l10n.t("ERR_INTERNAL_SERVER"));
+    }
+  };
+
+  public forgotPasswordEmail = async (
+    email,
+    authUser
+  ): Promise<ResponseBuilder> => {
+    try {
+      const userInfo = await user.findById(authUser["_id"]);
+      if (!userInfo) {
+        return ResponseBuilder.errorMessage("User not found.");
+      }
+      const token = this.JWT.signJWT({
+        user_id: authUser["_id"],
+        account_type: userInfo.account_type,
+      });
+      const url = `${process.env.FRONTEND_URL}/auth/verified-forget-password?token=${token}`;
+      SendEmail.sendRawEmail(
+        null,
+        null,
+        [email],
+        "Change NetQwix Training Portal Password",
+        null,
+        `<div style="font-family: Verdana,Arial,Helvetica,sans-serif;font-size: 18px;line-height: 30px;">
+      Hello <i  style='color:#ff0000'>${userInfo.fullname},</i>
+      <br/>
+      To proceed with the password reset, kindly <a href=${url}>click here.</a>
+      <br/>
+      NetQwix Security.
+      <br/>
+      <img src=${NetquixImage.logo} width='100px' height='100px'/>
+       </div> `
+      );
+      return ResponseBuilder.data({}, l10n.t("RESET_PASSWORD_MAIL_SEND"));
+    } catch (err) {
+      return ResponseBuilder.error(err, l10n.t("ERR_INTERNAL_SERVER"));
+    }
+  };
+
+  public confirmForgetPassword = async (authUser): Promise<ResponseBuilder> => {
+    try {
+      const { password, token } = authUser;
+      if (!password || !token) {
+        return ResponseBuilder.badRequest(l10n.t("MISSING_PARAMETERS"));
+      }
+      const hashedPassword = await this.bcrypt.getHashedPassword(password);
+      const decodedToken = await JWT.decodeAuthToken(token);
+      if (!decodedToken || !decodedToken["user_id"]) {
+        return ResponseBuilder.badRequest(l10n.t("NOT_VERIFIED_TOKEN"));
+      }
+      const updatedUser = await user.findOneAndUpdate(
+        { _id: decodedToken["user_id"] },
+        { $set: { password: hashedPassword } },
+        { new: true }
+      );
+      if (!updatedUser) {
+        return ResponseBuilder.error(l10n.t("USER_NOT_FOUND"));
+      }
+      return ResponseBuilder.data(
+        { data: updatedUser },
+        l10n.t("PASSWORD_RESET_SUCCESS")
+      );
+    } catch (err) {
+      console.error("Error in confirmResetPassword:", err);
+      if (err.code === CONSTANCE.RES_CODE.error.badRequest) {
+        return ResponseBuilder.error(l10n.t("NOT_VERIFIED_TOKEN"));
+      } else {
+        console.error("Error in confirmResetPassword:", err);
+        return ResponseBuilder.error(l10n.t("ERR_INTERNAL_SERVER"));
+      }
+    }
+  };
+
+  public isGoogleUserExists = async (googleUser: googleLoginModel) => {
+    try {
+      const { email } = googleUser;
+      if (!email) {
+        return ResponseBuilder.badRequest("Email is required.");
+      }
+      return await user.findOne({ email });
+    } catch (error) {
+      return ResponseBuilder.error(l10n.t("ERR_INTERNAL_SERVER"));
+    }
+  };
+
+  public googleLogin = async (user): Promise<any> => {
+    try {
+      const payload = {
+        user_id: user._id,
+        account_type: user.account_type,
+      };
+      const access_token = this.JWT.signJWT(payload);
+      //TODO: Store access_token in DB
+      return ResponseBuilder.data(
+        { data: { access_token, account_type: user.account_type } },
+        l10n.t("LOGIN_SUCCESSFULL")
+      );
+    } catch (error) {
+      return ResponseBuilder.error(l10n.t("ERR_INTERNAL_SERVER"));
+    }
+  };
+}
