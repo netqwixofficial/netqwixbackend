@@ -323,7 +323,7 @@ export class TraineeService {
         <br/><br/>
         Team NetQwix.
         <br/>
-        <img src=${NetquixImage.logo} width='100px' height='100px'/>
+        <img src=${NetquixImage.logo} style="object-fit: contain; width: 180px;"/>
       </div>`;
       const trainerMessageTemplate = `<div style="font-family: Verdana, Arial, Helvetica, sans-serif; font-size: 18px; line-height: 30px;">
         Dear <i style='color:#ff0000'>${trainerDetails.fullname},</i>
@@ -333,7 +333,7 @@ export class TraineeService {
         <br/><br/>
         Team NetQwix.
         <br/>
-        <img src=${NetquixImage.logo} width='100px' height='100px'/>
+        <img src=${NetquixImage.logo} style="object-fit: contain; width: 180px;"/>
       </div>`;
       const charging_price = `${amountType.USD}${+payload.charging_price}.`;
       const paymentConfirmationSubject = "NetQwix payment confirmed";
@@ -348,8 +348,8 @@ export class TraineeService {
           <br/>
         	Team NetQwix.
           <br/>
-        	<img src=${NetquixImage.logo} width='100px' height='100px'/>
-        	 </div>`;
+        	<img src=${NetquixImage.logo} style="object-fit: contain; width: 180px;"/>
+        	</div>`;
       SendEmail.sendRawEmail(
         null,
         null,
