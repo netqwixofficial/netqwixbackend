@@ -73,7 +73,7 @@ export class AuthService {
         <br/><br/>
         Team NetQwix. 
         <br/>
-        <img src=${NetquixImage.logo} width='100px' height='100px'/>
+        <img src=${NetquixImage.logo} style="object-fit: contain; width: 180px;"/>
         </div> `
     );
 
@@ -170,7 +170,7 @@ export class AuthService {
       <br/>
       NetQwix Security.
       <br/>
-      <img src=${NetquixImage.logo} width='100px' height='100px'/>
+      <img src=${NetquixImage.logo} style="object-fit: contain; width: 180px;"/>
        </div> `
       );
       return ResponseBuilder.data({}, l10n.t("RESET_PASSWORD_MAIL_SEND"));
