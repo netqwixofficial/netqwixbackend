@@ -88,7 +88,7 @@ export class UserService {
           <br/>
           Team NetQwix.
           <br/>
-          <img src=${NetquixImage.logo} width='100px' height='100px'/>
+          <img src=${NetquixImage.logo} style="object-fit: contain; width: 180px;"/>
            </div> `
           );
         }

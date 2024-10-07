@@ -221,7 +221,7 @@ export const handleSocketEvents = (socket, connections = {}) => {
 const listenNotificationEvents = (socket) => {
   try {
     socket.on(EVENTS.PUSH_NOTIFICATIONS.ON_SEND, async (payload: any) => {
-      const { title, description, senderId, receiverId } = payload;
+      const { title, description, senderId, receiverId , bookingInfo } = payload;
       const toUserSocketId = MemCache.getDetail(
         process.env.SOCKET_CONFIG,
         receiverId
@@ -251,6 +251,7 @@ const listenNotificationEvents = (socket) => {
           name: sender?.fullname,
           profile_picture: sender?.profile_picture || null,
         },
+        bookingInfo
       });
       if (subscription) {
         try {
