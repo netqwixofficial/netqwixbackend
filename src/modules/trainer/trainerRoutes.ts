@@ -14,6 +14,8 @@ const V: validator = new validator();
 const authorizeMiddleware = new AuthorizeMiddleware();
 const trainerMiddleware = new TrainerMiddleware();
 
+route.get("/top-trainers" , trainerC.getTrainers);
+
 route.use([
   (req, res, next) => {
     req.byPassRoute = [];
