@@ -54,5 +54,11 @@ export class App {
       },
     });
     this.socketEvents.init(io, this.app);
+
+  // Example route to get connected users
+  this.app.get('/connected-users', (req, res) => {
+  const connectedUsers = this.socketEvents.getConnectedUsers();
+  res.json({ connectedUsers });
+  });
   }
 }

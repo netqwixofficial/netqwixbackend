@@ -9,10 +9,11 @@ import { MemCache } from "../../Utils/memCache";
 export class SocketInit {
   private logger = log.getLogger();
   private middleware: AuthMiddleware = new AuthMiddleware();
+  
+  private connectedUsers = new Map<string, { socketId: string; userData: any }>(); // Updated to store userId and complete user data
+
 
   public init = (io: Server, app) => {
-    // storing connection in one object for now with their room and socket id.
-    // on new connection
     io.use(async (socket, next) => {
       const token = socket.handshake.query.authorization;
       if (token) {
@@ -28,29 +29,47 @@ export class SocketInit {
         }
       }
     })
-      .on("connection", async (socket, request) => {
-        try {
-          socket.emit(EVENTS.ON_CONNECT, {
-            msg: "Welcome, Socket Connect Successfully, socket",
-          });
-          // console.log("=========>user details",socket.user )
-          MemCache.setDetail(process.env.SOCKET_CONFIG, socket.user._id, socket.id);
-          // mentioning all pending events
-          handleSocketEvents(socket);
-          // on disconnect
-          onDisconnect(socket);
-        } catch (err) {
-          this.logger.info(`After Connection getting ERR -> ${err}`);
-          socket.emit(EVENTS.ON_ERROR, { msg: JSON.stringify(err) });
-        }
-      });
-
-      const onDisconnect = (socket) => {
-        socket.on(EVENTS.ON_DISCONNECT, async () => {
-          const me = socket.user._id;
-          this.logger.info(`User Disconnected ---> ${socket.user._id}`);
-          MemCache.deleteDetail(process.env.SOCKET_CONFIG, me);
+    .on("connection", async (socket, request) => {
+      try {
+        socket.emit(EVENTS.ON_CONNECT, {
+          msg: "Welcome, Socket Connect Successfully, socket",
         });
+        
+        // Store the complete user data
+        this.connectedUsers.set(socket.user._id, { socketId: socket.id, userData: socket.user });
+        MemCache.setDetail(process.env.SOCKET_CONFIG, socket.user._id, socket.id);
+        
+        // Handle socket events
+        handleSocketEvents(socket);
+        
+        // Handle disconnect event
+        onDisconnect(socket);
+        
+        // Optional: Log all connected users
+        this.logger.info(`Currently connected users: ${Array.from(this.connectedUsers.keys())}`);
+      } catch (err) {
+        this.logger.info(`After Connection getting ERR -> ${err}`);
+        socket.emit(EVENTS.ON_ERROR, { msg: JSON.stringify(err) });
       }
+    });
+
+    const onDisconnect = (socket) => {
+      socket.on(EVENTS.ON_DISCONNECT, async () => {
+        const userId = socket.user._id;
+        this.logger.info(`User Disconnected ---> ${userId}`);
+        
+        // Remove the user from the connected users map
+        this.connectedUsers.delete(userId);
+        MemCache.deleteDetail(process.env.SOCKET_CONFIG, userId);
+
+        // Optional: Log remaining connected users
+        this.logger.info(`Currently connected users: ${Array.from(this.connectedUsers.keys())}`);
+      });
+    }
+  };
+
+  // Method to retrieve the list of connected users with complete data
+  public getConnectedUsers = () => {
+    return Array.from(this.connectedUsers.values()); // Return an array of user data objects
   };
 }
