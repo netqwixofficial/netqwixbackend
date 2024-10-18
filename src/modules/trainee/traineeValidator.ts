@@ -46,6 +46,8 @@ export class bookSessionModal extends model {
   @IsNumber()
   public charging_price: number;
 
+  public iceServers: any[]; 
+  
   constructor(body) {
     super();
     const {
@@ -55,6 +57,7 @@ export class bookSessionModal extends model {
       session_start_time,
       session_end_time,
       charging_price,
+      iceServers
     } = body;
     this.trainer_id = trainer_id;
     this.status = status;
@@ -63,6 +66,7 @@ export class bookSessionModal extends model {
     this.session_end_time = session_end_time;
     this.session_link = null;
     this.charging_price = charging_price;
+    this.iceServers = iceServers || []; 
   }
 }
 

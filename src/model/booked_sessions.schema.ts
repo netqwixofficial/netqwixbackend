@@ -75,6 +75,10 @@ const bookedSessionsSchema: Schema = new Schema(
         application_fee_amount: {
             type: String,
         },
+        iceServers: {
+            type: Schema.Types.Array,
+            default: [],              
+        }
     },
     { timestamps: true }
 );
