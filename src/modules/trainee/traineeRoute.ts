@@ -43,4 +43,5 @@ route.post(
   V.validate(checkSlotExistModal),
   traineeC.checkSlotExist
 );
+route.get('/recent-trainers' , traineeC.recentTrainers)
 export const traineeRoute: Router = route;

@@ -110,7 +110,9 @@ export class commonService {
 
   public async videoUploadUrl(req: any, res: Response) {
     try {
-      req.body.user_id = req?.authUser?._id;
+      if(!req.body.user_id){
+        req.body.user_id = [req?.authUser?._id];
+      }
       var fileName =
         new Date().getTime().toString() +
         "." +
@@ -123,11 +125,10 @@ export class commonService {
 
       req.body.file_name = fileName;
       req.body.thumbnail = thumbnailFileName;
-
       const clipObj = new clip(req.body);
-
+      
       await clipObj.save();
-
+      console.log(clipObj , 'hello')
       let fileUrl = await this.generatePreSignedPutUrl(
         fileName,
         req?.body?.fileType
@@ -140,7 +141,7 @@ export class commonService {
 
       return res
         .status(CONSTANCE.RES_CODE.success)
-        .json({ success: 1, url: fileUrl, thumbnailURL });
+        .json({ success: 1, url: fileUrl, thumbnailURL , clipObj });
     } catch (error) {
       res.status(CONSTANCE.RES_CODE.error.internalServerError).json({
         success: 0,
@@ -253,12 +254,13 @@ export class commonService {
   public async getClips(req: any, res: Response) {
     try {
       const trainee_id = req.body.trainee_id ?? null;
+  
       var clips = await clip.aggregate([
         {
           $match: {
-            user_id: new mongoose.Types.ObjectId(
-              trainee_id ?? req?.authUser?._id
-            ),
+            user_id: { 
+              $in: [new mongoose.Types.ObjectId(trainee_id ?? req?.authUser?._id)] 
+            },
             $or: [{ status: true }, { status: { $exists: false } }],
           },
         },
@@ -271,6 +273,7 @@ export class commonService {
           },
         },
       ]);
+  
       return res.status(CONSTANCE.RES_CODE.success).json({ data: clips });
     } catch (error) {
       res.status(CONSTANCE.RES_CODE.error.internalServerError).json({

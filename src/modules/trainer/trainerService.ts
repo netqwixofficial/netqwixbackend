@@ -355,4 +355,49 @@ export class TrainerService {
       return ResponseBuilder.error(err, l10n.t("ERR_INTERNAL_SERVER"));
     }
   }
+
+  public async recentTrainers(authUser): Promise<ResponseBuilder> {
+    try {
+      const pipeline = [
+        {
+          '$match': {
+            'trainee_id': new mongoose.Types.ObjectId(authUser)
+          }
+        }, 
+        {
+          '$group': {
+            '_id': '$trainer_id'
+          }
+        }, 
+        {
+          '$lookup': {
+            'from': 'users',
+            'localField': '_id',
+            'foreignField': '_id',
+            'as': 'trainer',
+            'pipeline': [
+              {
+                '$project': Constant.pipelineUser,
+              }
+            ],
+          }
+        }, 
+        {
+          '$unwind': {
+            'path': '$trainer'
+          }
+        }, 
+        {
+          '$replaceRoot': {
+            'newRoot': '$trainer'
+          }
+        }
+      ]
+      const result = await booked_session.aggregate(pipeline);
+      return ResponseBuilder.data(result, l10n.t("NO_TRAINERS_FOUND"));
+    } catch (error) {
+      console.log("====+", error)
+      return ResponseBuilder.errorMessage("Internal server error");
+    }
+  }
 }
