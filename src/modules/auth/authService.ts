@@ -14,6 +14,7 @@ import { SendEmail } from "../../Utils/sendEmail";
 import { CONSTANCE, NetquixImage } from "../../config/constance";
 import { stripeHelperController } from "../stripe/stripeHelperController";
 import admin_setting from "../../model/default_admin_setting.schema";
+import ReferredUser from "../../model/referred.user.schema";
 const stripe = require("stripe")(process.env.STRIPE_SECRET);
 
 
@@ -28,18 +29,22 @@ export class AuthService {
     this.log.info(createUser);
     let hashPassword: string;
     let account: any;
+  
+    // Check if a referred user with this email exists
+    const referredUser = await ReferredUser.findOne({ email: createUser.email });
+  
     if (createUser.password) {
       hashPassword = await this.bcrypt.getHashedPassword(createUser.password);
     }
-
+  
     if (createUser.account_type === AccountType.TRAINER) {
       account = await stripeHelperController.createAccount(createUser);
     } else if (createUser.account_type === AccountType.TRAINEE) {
       account = await stripeHelperController.createCustomer(createUser);
     }
-
+  
     const global_commission = await admin_setting.findOne();
-
+  
     const updateduserObj = {
       ...createUser,
       password: createUser.password ? hashPassword : null,
@@ -50,12 +55,21 @@ export class AuthService {
       stripe_account_id: account?.id,
       commission: global_commission?.commission ?? 0,
     };
-
+  
     delete createUser.isGoogleRegister;
-
-    const userObj = new user(updateduserObj);
+  
+    // Create the user object, but replace its _id if referredUser exists
+    const userObj = referredUser
+      ? new user({ ...updateduserObj, _id: referredUser._id }) // Use referred user's _id
+      : new user(updateduserObj); // Create a new user normally
+  
     await userObj.save();
-
+  
+    // Remove the referred user from the ReferredUser collection if it was created from there
+    if (referredUser) {
+      await ReferredUser.deleteOne({ _id: referredUser._id });
+    }
+  
     SendEmail.sendRawEmail(
       null,
       "",
@@ -76,7 +90,7 @@ export class AuthService {
         <img src=${NetquixImage.logo} style="object-fit: contain; width: 180px;"/>
         </div> `
     );
-
+  
     return ResponseBuilder.data(userObj, l10n.t("USER_CREATED_SUCCESS"));
   };
 

@@ -22,6 +22,7 @@ import { ResponseBuilder } from "../../helpers/responseBuilder";
 import user from "../../model/user.schema";
 import { Constant } from "../../Utils/constant";
 import sharp = require("sharp");
+import ReferredUser from "../../model/referred.user.schema";
 const bucketName = process.env.AWS_BUCKET_NAME;
 const region = process.env.AWS_REGION;
 const accessKeyId = process.env.AWS_ACCESS_KEY_ID;
@@ -108,11 +109,50 @@ export class commonService {
     }
   }
 
+  private async processInvites(invites: string[], referrerId: string): Promise<string[]> {
+    const userIds: string[] = [];
+  
+    for (const inviteEmail of invites) {
+      // Check if a user with this email already exists in the User collection
+      const existingUser = await user.findOne<any>({ email: inviteEmail });
+  
+      if (existingUser) {
+        // If the user exists, push their ID into userIds
+        userIds.push(existingUser._id);
+      } else {
+        // Check if the email exists in the ReferredUser collection
+        const existingReferredUser = await ReferredUser.findOne<any>({ email: inviteEmail });
+  
+        if (existingReferredUser) {
+          // If the referred user exists, push their ID into userIds
+          userIds.push(existingReferredUser._id);
+        } else {
+          // If the user doesn't exist in both collections, create a new referred user
+          const referredUser = new ReferredUser({
+            email: inviteEmail,
+            referrerId,
+          });
+  
+          // Save the referred user and push their ID into userIds
+          const savedReferredUser = await referredUser.save();
+          userIds.push(savedReferredUser._id);
+        }
+      }
+    }
+  
+    return userIds;
+  }
+
   public async videoUploadUrl(req: any, res: Response) {
     try {
       if(!req.body.user_id){
         req.body.user_id = [req?.authUser?._id];
       }
+      if (req.body.invites  && Array.isArray(req.body.invites)) {
+        const userIds = await this.processInvites(req.body.invites, req.authUser._id);
+        req.body.user_id = [...req.body.user_id ,  ...userIds];
+      }
+
       var fileName =
         new Date().getTime().toString() +
         "." +
@@ -128,7 +168,7 @@ export class commonService {
       const clipObj = new clip(req.body);
       
       await clipObj.save();
-      console.log(clipObj , 'hello')
+
       let fileUrl = await this.generatePreSignedPutUrl(
         fileName,
         req?.body?.fileType
