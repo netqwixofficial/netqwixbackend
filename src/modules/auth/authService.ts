@@ -69,7 +69,7 @@ export class AuthService {
     if (referredUser) {
       await ReferredUser.deleteOne({ _id: referredUser._id });
     }
-  
+    
     SendEmail.sendRawEmail(
       null,
       "",

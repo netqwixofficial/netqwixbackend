@@ -460,74 +460,128 @@ export class TraineeService {
 
   public async checkSlotExist(reqBody): Promise<ResponseBuilder> {
     try {
-      const { slotTime, trainer_id, booked_date } = reqBody;
+      const { slotTime, trainer_id, booked_date, traineeTimeZone } = reqBody;
       const trainerInfo = await user.findById(trainer_id);
-      const { working_hours } = trainerInfo?.extraInfo || {
-        from: "00:00",
-        to: "23:59",
-      };
-      const isFutureOrToday = Utils.isFutureOrToday(booked_date);
-      const isValidTrainerId = isValidMongoObjectId(trainer_id);
-      if (!isValidTrainerId || !trainerInfo) {
+      
+      if (!isValidMongoObjectId(trainer_id) || !trainerInfo) {
         return ResponseBuilder.badRequest("Invalid trainer id", 400);
       }
+  
+      const isFutureOrToday = Utils.isFutureOrToday(booked_date);
       if (!isFutureOrToday) {
         return ResponseBuilder.badRequest(
           "Please choose either today's date or a future date",
           400
         );
       }
-
-      const result = await booked_session
+  
+      const { availabilityInfo } = trainerInfo?.extraInfo || {};
+      if (!availabilityInfo) {
+        return ResponseBuilder.badRequest("Trainer availability not set", 400);
+      }
+  
+      // Helper functions for timezone conversions
+      const parseTimezone = (timezone: string) => {
+        const match = timezone.match(/GMT([+-])(\d{2}):?(\d{2})/);
+        if (!match) return 0;
+        const [_, sign, hours, minutes] = match;
+        const totalMinutes = parseInt(hours) * 60 + parseInt(minutes);
+        return sign === '+' ? totalMinutes : -totalMinutes;
+      };
+  
+      const convertTime = (time: string, fromOffset: number, toOffset: number) => {
+        // Convert "HH:mm" or "hh:mm AM/PM" to minutes since midnight
+        let minutes;
+        if (time.includes('AM') || time.includes('PM')) {
+          const [timeStr, period] = time.split(' ');
+          let [hours, mins] = timeStr.split(':').map(Number);
+          if (period === 'PM' && hours !== 12) hours += 12;
+          if (period === 'AM' && hours === 12) hours = 0;
+          minutes = hours * 60 + mins;
+        } else {
+          const [hours, mins] = time.split(':').map(Number);
+          minutes = hours * 60 + mins;
+        }
+  
+        // Apply timezone conversion
+        minutes = minutes - fromOffset + toOffset;
+  
+        // Handle day overflow/underflow
+        while (minutes < 0) minutes += 24 * 60;
+        while (minutes >= 24 * 60) minutes -= 24 * 60;
+  
+        // Convert back to HH:mm format
+        const hours = Math.floor(minutes / 60);
+        const mins = minutes % 60;
+        return `${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}`;
+      };
+  
+      // Get timezone offsets
+      const traineeOffset = parseTimezone(traineeTimeZone);
+      const trainerOffset = parseTimezone(availabilityInfo.timeZone.replace(')', '').split('(')[1]);
+  
+      // Get day of week for the booked date
+      const date = new Date(booked_date);
+      const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+      const dayOfWeek = days[date.getDay()];
+  
+      // Get trainer's availability for the given day
+      const dayAvailability = availabilityInfo.availability[dayOfWeek];
+      if (!dayAvailability || dayAvailability.length === 0) {
+        return ResponseBuilder.data(
+          { 
+            isAvailable: false, 
+            message: "Trainer not available on this day" 
+          },
+          l10n.t("SLOT_STATUS")
+        );
+      }
+  
+      // Generate available slots in trainee's timezone
+      const availableSlots = [];
+      const duration = availabilityInfo.selectedDuration;
+  
+      for (const slot of dayAvailability) {
+        // Convert trainer's slot times to trainee's timezone
+        const startTime = convertTime(slot.start, trainerOffset, traineeOffset);
+        const endTime = convertTime(slot.end, trainerOffset, traineeOffset);
+  
+        // Generate slots based on duration
+        let currentMinutes = timeToMinutes(startTime);
+        const endMinutes = timeToMinutes(endTime);
+  
+        while (currentMinutes + duration <= endMinutes) {
+          const slotStart = minutesToTime(currentMinutes);
+          const slotEnd = minutesToTime(currentMinutes + duration);
+          
+          availableSlots.push({
+            start: slotStart,
+            end: slotEnd
+          });
+          
+          currentMinutes += duration;
+        }
+      }
+  
+      // Helper functions for time conversion
+      function timeToMinutes(time: string): number {
+        const [hours, minutes] = time.split(':').map(Number);
+        return hours * 60 + minutes;
+      }
+  
+      function minutesToTime(minutes: number): string {
+        const hours = Math.floor(minutes / 60);
+        const mins = minutes % 60;
+        return `${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}`;
+      }
+  
+      // Check for existing bookings
+      const existingBookings = await booked_session
         .aggregate([
           {
             $match: {
               trainer_id: new mongoose.Types.ObjectId(trainer_id),
               status: { $ne: BOOKED_SESSIONS_STATUS.cancel },
-              $or: [
-                {
-                  $and: [
-                    {
-                      session_start_time: {
-                        $lte: working_hours?.from || "00:00",
-                      },
-                    },
-                    {
-                      session_end_time: {
-                        $gte: working_hours?.from || "00:00",
-                      },
-                    },
-                  ],
-                },
-                {
-                  $and: [
-                    {
-                      session_start_time: {
-                        $lte: working_hours?.to || "23:59",
-                      },
-                    },
-                    {
-                      session_end_time: {
-                        $gte: working_hours?.to || "23:59",
-                      },
-                    },
-                  ],
-                },
-                {
-                  $and: [
-                    {
-                      session_start_time: {
-                        $gte: working_hours?.from || "00:00",
-                      },
-                    },
-                    {
-                      session_end_time: {
-                        $lte: working_hours?.to || "23:59",
-                      },
-                    },
-                  ],
-                },
-              ],
               $expr: {
                 $eq: [
                   {
@@ -543,20 +597,42 @@ export class TraineeService {
           },
           {
             $project: {
-              _id: 1,
-              booked_date: 1,
-              trainer_id: 1,
-              trainee_id: 1,
               session_start_time: 1,
               session_end_time: 1,
             },
           },
         ])
         .exec();
-
+  
+      // Remove booked slots
+      const finalAvailableSlots = availableSlots.filter(slot => {
+        return !existingBookings.some(booking => {
+          const bookingStart = convertTime(
+            booking.session_start_time,
+            trainerOffset,
+            traineeOffset
+          );
+          const bookingEnd = convertTime(
+            booking.session_end_time,
+            trainerOffset,
+            traineeOffset
+          );
+          return (
+            (slot.start >= bookingStart && slot.start < bookingEnd) ||
+            (slot.end > bookingStart && slot.end <= bookingEnd)
+          );
+        });
+      });
+  
+    
+  
       return ResponseBuilder.data(
-        { isAvailable: result && result.length ? false : true, result },
-
+        {
+          isAvailable: finalAvailableSlots?.length > 0,
+          availableSlots: finalAvailableSlots,
+          trainerTimezone: availabilityInfo.timeZone,
+          traineeTimezone: traineeTimeZone
+        },
         l10n.t("SLOT_STATUS")
       );
     } catch (err) {

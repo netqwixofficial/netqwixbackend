@@ -84,7 +84,7 @@ export class traineeController {
     } catch (err) {
       this.logger.error(err);
       return res
-        .status(err.code)
+        .status(err.code || 500)
         .send({ status: CONSTANCE.FAIL, error: err.error });
     }
   };
@@ -131,15 +131,15 @@ export class traineeController {
         req.body
       );
       if (result.status === CONSTANCE.FAIL) {
-        return res.status(result.code).send({ message: result.error });
+        return res.status(result?.code || 404).send({ message: result.error });
       }
       return res
-        .status(result.code)
+        .status(result?.code || 200)
         .send({ status: CONSTANCE.SUCCESS, data: result.result });
     } catch (err) {
       this.logger.error(err);
       return res
-        .status(err.code)
+        .status(err.code || 500)
         .send({ status: CONSTANCE.FAIL, error: err.error });
     }
   };

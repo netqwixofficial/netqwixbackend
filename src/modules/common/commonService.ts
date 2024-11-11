@@ -8,6 +8,7 @@ import {
   CONSTANCE,
   MAX_FILE_SIZE_MB,
   Message,
+  NetquixImage,
 } from "../../config/constance";
 import * as l10n from "jm-ez-l10n";
 import { Request, Response } from "express";
@@ -23,6 +24,7 @@ import user from "../../model/user.schema";
 import { Constant } from "../../Utils/constant";
 import sharp = require("sharp");
 import ReferredUser from "../../model/referred.user.schema";
+import { SendEmail } from "../../Utils/sendEmail";
 const bucketName = process.env.AWS_BUCKET_NAME;
 const region = process.env.AWS_REGION;
 const accessKeyId = process.env.AWS_ACCESS_KEY_ID;
@@ -109,39 +111,72 @@ export class commonService {
     }
   }
 
-  private async processInvites(invites: string[], referrerId: string): Promise<string[]> {
+  private async processInvites(invites: string[], referrerUser): Promise<string[]> {
     const userIds: string[] = [];
-  
+    
     for (const inviteEmail of invites) {
-      // Check if a user with this email already exists in the User collection
-      const existingUser = await user.findOne<any>({ email: inviteEmail });
-  
-      if (existingUser) {
-        // If the user exists, push their ID into userIds
-        userIds.push(existingUser._id);
-      } else {
-        // Check if the email exists in the ReferredUser collection
-        const existingReferredUser = await ReferredUser.findOne<any>({ email: inviteEmail });
-  
-        if (existingReferredUser) {
-          // If the referred user exists, push their ID into userIds
-          userIds.push(existingReferredUser._id);
+      try {
+        // Check if a user with this email already exists in the User collection
+        const existingUser = await user.findOne<any>({ email: inviteEmail });
+        let emailBody = `
+        <div style="font-family: Verdana,Arial,Helvetica,sans-serif;font-size: 18px;line-height: 30px;">
+        Hello ${existingUser ? `<i style='color:#aebf76'>${existingUser.fullname}</i>,` : ''} 
+        <br/><br/>
+        ${referrerUser.fullname} has shared a video with you! 
+        <br/><br/>
+        Please <u style='color:#aebf76'><a href=${process.env.FRONTEND_URL}>${existingUser ? 'log in' : 'sign up'}</a></u> 
+        to check it out and connect with other NetQwix Team Members.
+        <br/><br/>
+        Team NetQwix. 
+        <br/>
+        <img src=${NetquixImage.logo} style="object-fit: contain; width: 180px;"/>
+        </div>`;
+
+        if (existingUser) {
+          // If the user exists, push their ID into userIds
+          userIds.push(existingUser._id);
+
+          
         } else {
-          // If the user doesn't exist in both collections, create a new referred user
-          const referredUser = new ReferredUser({
-            email: inviteEmail,
-            referrerId,
-          });
+          // Check if the email exists in the ReferredUser collection
+          const existingReferredUser = await ReferredUser.findOne<any>({ email: inviteEmail });
   
-          // Save the referred user and push their ID into userIds
-          const savedReferredUser = await referredUser.save();
-          userIds.push(savedReferredUser._id);
+          if (existingReferredUser) {
+            // If the referred user exists, push their ID into userIds
+            userIds.push(existingReferredUser._id);
+          } else {
+            // If the user doesn't exist in both collections, create a new referred user
+            const referredUser = new ReferredUser({
+              email: inviteEmail,
+              referrerId: referrerUser._id,
+            });
+  
+            // Save the referred user and push their ID into userIds
+            const savedReferredUser = await referredUser.save();
+            userIds.push(savedReferredUser._id);
+          }
         }
+        
+        if(referrerUser._id !== existingUser._id){
+          SendEmail.sendRawEmail(
+            null,
+            "",
+            [inviteEmail],
+            "Video Shared with You by " + referrerUser.fullname,
+            null,
+            emailBody
+          );
+        }
+
+      } catch (error) {
+        console.error(`Error processing invite for ${inviteEmail}:`, error);
+        // You may want to handle the error further (e.g., log it, throw it, etc.)
       }
     }
   
     return userIds;
   }
+  
 
   public async videoUploadUrl(req: any, res: Response) {
     try {
@@ -149,7 +184,7 @@ export class commonService {
         req.body.user_id = [req?.authUser?._id];
       }
       if (req.body.invites  && Array.isArray(req.body.invites)) {
-        const userIds = await this.processInvites(req.body.invites, req.authUser._id);
+        const userIds = await this.processInvites(req.body.invites, req.authUser);
         req.body.user_id = [...req.body.user_id ,  ...userIds];
       }
 

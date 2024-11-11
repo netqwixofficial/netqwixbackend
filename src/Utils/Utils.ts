@@ -94,4 +94,31 @@ export class Utils {
     }
     return amount;
   };
+
+  static getTheDay = (inputString) =>{
+    // Ensure bookedDate is a Date object
+    const bookedDate = new Date(inputString); // Example date string, replace with actual value
+    const dayOfWeek = bookedDate.toLocaleDateString('en-US', { weekday: 'short' });
+    return dayOfWeek; // Should print the day of the week (e.g., 'Thu')
+    }
+    
+    static convertTo24HourFormat = (time) =>  {
+        const [hours, minutes, period] = time.split(/[:\s]/);
+        let hour = parseInt(hours, 10);
+        const minute = minutes;
+        
+        // If the time is PM and not 12 PM, add 12 to the hour (e.g., 1 PM becomes 13)
+        if (period === 'PM' && hour !== 12) {
+            hour += 12;
+        }
+    
+        // If the time is AM and 12 AM, set hour to 0 (midnight)
+        if (period === 'AM' && hour === 12) {
+            hour = 0;
+        }
+    
+        // Format the hour and minute into 24-hour time format
+        const formattedHour = hour.toString().padStart(2, '0'); // Ensure two digits for the hour
+        return `${formattedHour}:${minute}`;
+    }
 }
