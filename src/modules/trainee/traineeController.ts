@@ -125,22 +125,42 @@ export class traineeController {
     }
   };
 
-  public checkSlotExist = async (req: any, res: Response) => {
+  public checkSlotExist = async (req: Request, res: Response) => {
     try {
-      const result: ResponseBuilder = await this.traineeService.checkSlotExist(
-        req.body
-      );
-      if (result.status === CONSTANCE.FAIL) {
-        return res.status(result?.code || 404).send({ message: result.error });
-      }
-      return res
-        .status(result?.code || 200)
-        .send({ status: CONSTANCE.SUCCESS, data: result.result });
+      console.log('body',req.body)
+      const result: ResponseBuilder = await this.traineeService.checkSlotExist(req.body);
+    const requestedDate = req.body.booked_date; // Assuming booked_date is a string in "YYYY-MM-DD" format
+    const today = new Date().toISOString().split("T")[0]; // Format today's date as "YYYY-MM-DD"
+
+    // Filter out past slots if the request is for today's date
+     // Filter out past slots if the request is for today's date
+     if (requestedDate === today) {
+      const currentTime = new Date();
+
+      result.result.availableSlots = result.result.availableSlots.filter((slot: { start: string, end: string }) => {
+        // Create a Date object for the slot's start time on today's date
+        const slotStartTime = new Date(`${requestedDate}T${slot.start}:00`); // Assuming time format "HH:MM"
+
+        // Only keep slots where the start time is later than the current time
+        return slotStartTime > currentTime;
+      });
+    }
+
+
+    console.log("result", JSON.stringify(result.result));
+
+    if (result.status === CONSTANCE.FAIL) {
+      return res.status(result?.code || 404).send({ message: result.error });
+    }
+    return res
+      .status(result?.code || 200)
+      .send({ status: CONSTANCE.SUCCESS, data: result.result });
     } catch (err) {
       this.logger.error(err);
+      console.log('err',err)
       return res
         .status(err.code || 500)
-        .send({ status: CONSTANCE.FAIL, error: err.error });
+        .send({ status: CONSTANCE.FAIL, error: err });
     }
   };
 
