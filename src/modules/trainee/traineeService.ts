@@ -461,7 +461,7 @@ export class TraineeService {
   public async checkSlotExist(reqBody): Promise<ResponseBuilder> {
     try {
       const { slotTime, trainer_id, booked_date, traineeTimeZone } = reqBody;
-      
+  
       // Validate required fields
       if (!slotTime?.from || !slotTime?.to) {
         return ResponseBuilder.badRequest("Missing slot time", 400);
@@ -473,31 +473,37 @@ export class TraineeService {
         return ResponseBuilder.badRequest("Missing booked date", 400);
       }
       if (!trainer_id) {
-        return ResponseBuilder.badRequest("Missing trainer id", 400);
+        return ResponseBuilder.badRequest("Missing trainer ID", 400);
       }
   
+      // Fetch trainer info
       const trainerInfo = await user.findById(trainer_id);
       if (!trainerInfo?.extraInfo?.availabilityInfo) {
         return ResponseBuilder.badRequest("Trainer availability not set", 400);
       }
-      
-      // Helper functions for timezone conversions
-      const parseTimezone = (timezone: string) => {
-        const match = timezone.match(/GMT([+-])(\d{2}):?(\d{2})/);
-        if (!match) return 0;
-        const [_, sign, hours, minutes] = match;
-        const totalMinutes = parseInt(hours) * 60 + parseInt(minutes);
-        return sign === '+' ? totalMinutes : -totalMinutes;
-      };
   
       const { availabilityInfo } = trainerInfo.extraInfo;
   
-      // Get day of week
+      // Parse trainee and trainer timezone offsets
+      const parseTimezone = (timezone: string): number => {
+        const match = timezone.match(/GMT([+-])(\d{2}):?(\d{2})?/);
+        if (!match) return 0;
+        const [, sign, hours, minutes = "0"] = match;
+        const offset = parseInt(hours) * 60 + parseInt(minutes);
+        return sign === '+' ? offset : -offset;
+      };
+  
+      const traineeOffset = parseTimezone(traineeTimeZone);
+      const trainerOffset = parseTimezone(
+        availabilityInfo.timeZone.replace(")", "").split("(")[1]
+      );
+  
+      // Determine day of the week
       const date = new Date(booked_date);
-      const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+      const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
       const dayOfWeek = days[date.getDay()];
   
-      // Get trainer's availability for the given day
+      // Get trainer's availability for the day
       const dayAvailability = availabilityInfo.availability?.[dayOfWeek] || [];
       if (dayAvailability.length === 0) {
         return ResponseBuilder.data({
@@ -505,78 +511,83 @@ export class TraineeService {
           availableSlots: [],
           message: "Trainer not available on this day",
           trainerTimezone: availabilityInfo.timeZone,
-          traineeTimezone: traineeTimeZone
+          traineeTimezone: traineeTimeZone,
         });
       }
-
-      // Helper function to convert 12-hour format to 24-hour format
+  
+      // Helper functions
       const convert12To24 = (timeStr: string): string => {
-        if (!timeStr.includes('AM') && !timeStr.includes('PM')) {
+        if (!timeStr.includes("AM") && !timeStr.includes("PM")) {
           return timeStr; // Already in 24-hour format
         }
-        
-        const [time, period] = timeStr.split(' ');
-        let [hours, minutes] = time.split(':').map(Number);
-        
-        if (period === 'PM' && hours !== 12) {
-          hours += 12;
-        } else if (period === 'AM' && hours === 12) {
-          hours = 0;
-        }
-        
-        return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
+        const [time, period] = timeStr.split(" ");
+        let [hours, minutes] = time.split(":").map(Number);
+        if (period === "PM" && hours !== 12) hours += 12;
+        if (period === "AM" && hours === 12) hours = 0;
+        return `${hours.toString().padStart(2, "0")}:${minutes
+          .toString()
+          .padStart(2, "0")}`;
       };
-
-      // Helper function to convert time to minutes
+  
       const timeToMinutes = (timeStr: string): number => {
-        const normalizedTime = timeStr.includes('AM') || timeStr.includes('PM') 
-          ? convert12To24(timeStr) 
+        const normalizedTime = timeStr.includes("AM") || timeStr.includes("PM")
+          ? convert12To24(timeStr)
           : timeStr;
-        const [hours, minutes] = normalizedTime.split(':').map(Number);
-        return (hours * 60) + minutes;
+        const [hours, minutes] = normalizedTime.split(":").map(Number);
+        return hours * 60 + minutes;
       };
-
-      // Helper function to convert minutes to 24-hour format time
+  
       const minutesToTime = (totalMinutes: number): string => {
-        totalMinutes = ((totalMinutes % 1440) + 1440) % 1440;
+        totalMinutes = ((totalMinutes % 1440) + 1440) % 1440; // Normalize to 24-hour format
         const hours = Math.floor(totalMinutes / 60);
         const minutes = totalMinutes % 60;
-        return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
+        return `${hours.toString().padStart(2, "0")}:${minutes
+          .toString()
+          .padStart(2, "0")}`;
       };
-
-      // Get timezone offsets
-      const traineeOffset = parseTimezone(traineeTimeZone);
-      const trainerOffset = parseTimezone(availabilityInfo.timeZone.replace(')', '').split('(')[1]);
-
-      // Convert time between timezones
-      const convertTime = (time: string, fromOffset: number, toOffset: number): string => {
-        let minutes = timeToMinutes(time);
-        minutes = minutes + (toOffset - fromOffset);
+  
+      const convertTime = (
+        time: string,
+        fromOffset: number,
+        toOffset: number
+      ): string => {
+        const minutes = timeToMinutes(time) + (toOffset - fromOffset);
         return minutesToTime(minutes);
       };
-
-      // Generate slots in trainer's timezone
-      let availableSlots = [];
-      const duration = availabilityInfo.selectedDuration || 60;
-
+  
+      // Generate available slots
+      const availableSlots = [];
+      const duration = parseInt(availabilityInfo.selectedDuration) || 60;
       for (const slot of dayAvailability) {
         let currentMinutes = timeToMinutes(slot.start);
         const endMinutes = timeToMinutes(slot.end);
-
         while (currentMinutes + duration <= endMinutes) {
-          const slotStartTime = minutesToTime(currentMinutes);
-          const slotEndTime = minutesToTime(currentMinutes + duration);
-
           availableSlots.push({
-            start: slotStartTime,
-            end: slotEndTime
+            start: minutesToTime(currentMinutes),
+            end: minutesToTime(currentMinutes + duration),
           });
-
           currentMinutes += duration;
         }
       }
-
-      // Get existing bookings
+  
+      // Adjust slots to trainee's timezone
+      const adjustedSlots = availableSlots.map((slot) => ({
+        start: convertTime(slot.start, trainerOffset, traineeOffset),
+        end: convertTime(slot.end, trainerOffset, traineeOffset),
+      }));
+  
+      // Filter based on requested time range
+      const requestedStartMinutes = timeToMinutes(slotTime.from);
+      const requestedEndMinutes = timeToMinutes(slotTime.to);
+      const filteredSlots = adjustedSlots.filter((slot) => {
+        const slotStartMinutes = timeToMinutes(slot.start);
+        return (
+          slotStartMinutes >= requestedStartMinutes &&
+          slotStartMinutes < requestedEndMinutes
+        );
+      });
+  
+      // Fetch existing bookings
       const existingBookings = await booked_session
         .aggregate([
           {
@@ -604,35 +615,26 @@ export class TraineeService {
           },
         ])
         .exec();
-
+  
       // Remove booked slots
-      availableSlots = availableSlots.filter(slot => {
-        return !existingBookings.some(booking => {
+      const finalSlots = filteredSlots.filter((slot) => {
+        return !existingBookings.some((booking) => {
           const slotStartMinutes = timeToMinutes(slot.start);
           const slotEndMinutes = timeToMinutes(slot.end);
           const bookingStartMinutes = timeToMinutes(booking.session_start_time);
           const bookingEndMinutes = timeToMinutes(booking.session_end_time);
-          
           return (
-            (slotStartMinutes >= bookingStartMinutes && slotStartMinutes < bookingEndMinutes) ||
-            (slotEndMinutes > bookingStartMinutes && slotEndMinutes <= bookingEndMinutes)
+            (slotStartMinutes >= bookingStartMinutes &&
+              slotStartMinutes < bookingEndMinutes) ||
+            (slotEndMinutes > bookingStartMinutes &&
+              slotEndMinutes <= bookingEndMinutes)
           );
         });
       });
-
-      // Filter slots based on requested time range
-      const requestedStartMinutes = timeToMinutes(slotTime.from);
-      const requestedEndMinutes = timeToMinutes(slotTime.to);
-
-      availableSlots = availableSlots.filter(slot => {
-        const slotStartMinutes = timeToMinutes(slot.start);
-        return slotStartMinutes >= requestedStartMinutes && 
-               slotStartMinutes < requestedEndMinutes;
-      });
-
+  
       return ResponseBuilder.data({
-        isAvailable: availableSlots.length > 0,
-        availableSlots,
+        isAvailable: finalSlots.length > 0,
+        availableSlots: finalSlots,
         trainerTimezone: availabilityInfo.timeZone,
         traineeTimezone: traineeTimeZone,
         debug: {
@@ -641,12 +643,13 @@ export class TraineeService {
           dayOfWeek,
           dayAvailability,
           requestedTimeRange: { from: slotTime.from, to: slotTime.to },
-          slotsBeforeFiltering: availableSlots.length
-        }
+          slotsBeforeFiltering: adjustedSlots.length,
+        },
       });
-
     } catch (error) {
-      console.error('Error in checkSlotExist:', error);
+      console.error("Error in checkSlotExist:", error);
+      return ResponseBuilder.errorMessage("An error occurred");
     }
-}
+  }
+  
 }
