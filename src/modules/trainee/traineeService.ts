@@ -274,7 +274,8 @@ export class TraineeService {
         !payload.booked_date ||
         !payload.session_start_time ||
         !payload.session_end_time ||
-        !payload.charging_price
+        !payload.charging_price ||
+        !payload.time_zone
       ) {
         const validationError: Failure = {
           type: "BAD_DATA",
@@ -301,7 +302,7 @@ export class TraineeService {
           "Invalid time format. Please use HH:mm format."
         );
       }
-      const sessionObj = new booked_session({ ...payload, trainee_id: _id });
+      const sessionObj = new booked_session({ ...payload, trainee_id: _id, time_zone: payload.time_zone });
       const trainerId = sessionObj["trainer_id"];
       const trainerDetails = await user.findById({ _id: trainerId });
       const traineeId = sessionObj["trainee_id"];

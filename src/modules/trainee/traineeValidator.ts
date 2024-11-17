@@ -11,6 +11,7 @@ import {
   IsObject,
   IsOptional,
   IsNumber,
+  isDate,
 } from "class-validator";
 import { IsUserTrainer } from "../user/userValidatorConstraints";
 export class bookSessionModal extends model {
@@ -46,6 +47,10 @@ export class bookSessionModal extends model {
   @IsNumber()
   public charging_price: number;
 
+  @IsNotEmpty()
+  @IsString()
+  public time_zone: string;
+
   public iceServers: any[]; 
   
   constructor(body) {
@@ -57,7 +62,8 @@ export class bookSessionModal extends model {
       session_start_time,
       session_end_time,
       charging_price,
-      iceServers
+      iceServers,
+      time_zone
     } = body;
     this.trainer_id = trainer_id;
     this.status = status;
@@ -67,6 +73,7 @@ export class bookSessionModal extends model {
     this.session_link = null;
     this.charging_price = charging_price;
     this.iceServers = iceServers || []; 
+    this.time_zone = time_zone
   }
 }
 
