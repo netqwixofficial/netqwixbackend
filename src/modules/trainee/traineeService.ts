@@ -19,9 +19,10 @@ import { PipelineStage } from "mongoose";
 import { DateFormat } from "../../Utils/dateFormat";
 import { SendEmail } from "../../Utils/sendEmail";
 import user from "../../model/user.schema";
-import { Utils } from "../../Utils/Utils";
+import { CovertTimeAccordingToTimeZone, isOverlap, Utils } from "../../Utils/Utils";
 import * as mongoose from "mongoose";
 import { Failure } from "../../helpers/error";
+import { DateTime } from "luxon";
 
 export class TraineeService {
   public log = log.getLogger();
@@ -222,8 +223,8 @@ export class TraineeService {
           {
             $match: day
               ? {
-                "available_slots.day": day,
-              }
+                  "available_slots.day": day,
+                }
               : {},
           },
           {
@@ -291,18 +292,22 @@ export class TraineeService {
       if (
         !timeRegex.test(
           typeof payload.session_start_time === "string" &&
-          payload.session_start_time
+            payload.session_start_time
         ) ||
         !timeRegex.test(
           typeof payload.session_end_time === "string" &&
-          payload.session_end_time
+            payload.session_end_time
         )
       ) {
         return ResponseBuilder.badRequest(
           "Invalid time format. Please use HH:mm format."
         );
       }
-      const sessionObj = new booked_session({ ...payload, trainee_id: _id, time_zone: payload.time_zone });
+      const sessionObj = new booked_session({
+        ...payload,
+        trainee_id: _id,
+        time_zone: payload.time_zone,
+      });
       const trainerId = sessionObj["trainer_id"];
       const trainerDetails = await user.findById({ _id: trainerId });
       const traineeId = sessionObj["trainee_id"];
@@ -462,7 +467,7 @@ export class TraineeService {
   public async checkSlotExist(reqBody): Promise<ResponseBuilder> {
     try {
       const { slotTime, trainer_id, booked_date, traineeTimeZone } = reqBody;
-  
+
       // Validate required fields
       if (!slotTime?.from || !slotTime?.to) {
         return ResponseBuilder.badRequest("Missing slot time", 400);
@@ -476,34 +481,26 @@ export class TraineeService {
       if (!trainer_id) {
         return ResponseBuilder.badRequest("Missing trainer ID", 400);
       }
-  
+
       // Fetch trainer info
       const trainerInfo = await user.findById(trainer_id);
       if (!trainerInfo?.extraInfo?.availabilityInfo) {
         return ResponseBuilder.badRequest("Trainer availability not set", 400);
       }
-  
+
       const { availabilityInfo } = trainerInfo.extraInfo;
-  
-      // Parse trainee and trainer timezone offsets
-      const parseTimezone = (timezone: string): number => {
-        const match = timezone.match(/GMT([+-])(\d{2}):?(\d{2})?/);
-        if (!match) return 0;
-        const [, sign, hours, minutes = "0"] = match;
-        const offset = parseInt(hours) * 60 + parseInt(minutes);
-        return sign === '+' ? offset : -offset;
-      };
-  
-      const traineeOffset = parseTimezone(traineeTimeZone);
-      const trainerOffset = parseTimezone(
-        availabilityInfo.timeZone.replace(")", "").split("(")[1]
-      );
-  
+
+      console.log("traineeTimeZone", traineeTimeZone);
+      console.log("trainerTimeZone", availabilityInfo.timeZone);
+
       // Determine day of the week
-      const date = new Date(booked_date);
+      const date = DateTime.fromISO(booked_date, { zone: 'utc' });
+      const dayOfWeek = date.toFormat("ccc");
+      console.log("date", date);
+      console.log("booked_date", dayOfWeek);
       const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-      const dayOfWeek = days[date.getDay()];
-  
+      // const dayOfWeek = days[date.getDay()];
+      console.log("availabilityInfo", availabilityInfo);
       // Get trainer's availability for the day
       const dayAvailability = availabilityInfo.availability?.[dayOfWeek] || [];
       if (dayAvailability.length === 0) {
@@ -515,79 +512,15 @@ export class TraineeService {
           traineeTimezone: traineeTimeZone,
         });
       }
-  
-      // Helper functions
-      const convert12To24 = (timeStr: string): string => {
-        if (!timeStr.includes("AM") && !timeStr.includes("PM")) {
-          return timeStr; // Already in 24-hour format
-        }
-        const [time, period] = timeStr.split(" ");
-        let [hours, minutes] = time.split(":").map(Number);
-        if (period === "PM" && hours !== 12) hours += 12;
-        if (period === "AM" && hours === 12) hours = 0;
-        return `${hours.toString().padStart(2, "0")}:${minutes
-          .toString()
-          .padStart(2, "0")}`;
-      };
-  
-      const timeToMinutes = (timeStr: string): number => {
-        const normalizedTime = timeStr.includes("AM") || timeStr.includes("PM")
-          ? convert12To24(timeStr)
-          : timeStr;
-        const [hours, minutes] = normalizedTime.split(":").map(Number);
-        return hours * 60 + minutes;
-      };
-  
-      const minutesToTime = (totalMinutes: number): string => {
-        totalMinutes = ((totalMinutes % 1440) + 1440) % 1440; // Normalize to 24-hour format
-        const hours = Math.floor(totalMinutes / 60);
-        const minutes = totalMinutes % 60;
-        return `${hours.toString().padStart(2, "0")}:${minutes
-          .toString()
-          .padStart(2, "0")}`;
-      };
-  
-      const convertTime = (
-        time: string,
-        fromOffset: number,
-        toOffset: number
-      ): string => {
-        const minutes = timeToMinutes(time) + (toOffset - fromOffset);
-        return minutesToTime(minutes);
-      };
-  
-      // Generate available slots
-      const availableSlots = [];
-      const duration = parseInt(availabilityInfo.selectedDuration) || 60;
-      for (const slot of dayAvailability) {
-        let currentMinutes = timeToMinutes(slot.start);
-        const endMinutes = timeToMinutes(slot.end);
-        while (currentMinutes + duration <= endMinutes) {
-          availableSlots.push({
-            start: minutesToTime(currentMinutes),
-            end: minutesToTime(currentMinutes + duration),
-          });
-          currentMinutes += duration;
-        }
-      }
-  
-      // Adjust slots to trainee's timezone
-      const adjustedSlots = availableSlots.map((slot) => ({
-        start: convertTime(slot.start, trainerOffset, traineeOffset),
-        end: convertTime(slot.end, trainerOffset, traineeOffset),
-      }));
-  
-      // Filter based on requested time range
-      const requestedStartMinutes = timeToMinutes(slotTime.from);
-      const requestedEndMinutes = timeToMinutes(slotTime.to);
-      const filteredSlots = adjustedSlots.filter((slot) => {
-        const slotStartMinutes = timeToMinutes(slot.start);
-        return (
-          slotStartMinutes >= requestedStartMinutes &&
-          slotStartMinutes < requestedEndMinutes
-        );
-      });
-  
+
+      const timeSlots = Utils.generateTimeSlots(
+        dayAvailability,
+        availabilityInfo,
+        booked_date,
+        traineeTimeZone
+      );
+      console.log("timeSlots", timeSlots);
+
       // Fetch existing bookings
       const existingBookings = await booked_session
         .aggregate([
@@ -603,48 +536,61 @@ export class TraineeService {
                       date: "$booked_date",
                     },
                   },
-                  booked_date,
+                  booked_date.split("T")[0],
                 ],
               },
             },
           },
           {
             $project: {
-              session_start_time: 1,
-              session_end_time: 1,
+              start_time: 1,
+              end_time: 1,
+              time_zone:1
             },
           },
         ])
         .exec();
-  
-      // Remove booked slots
-      const finalSlots = filteredSlots.filter((slot) => {
-        return !existingBookings.some((booking) => {
-          const slotStartMinutes = timeToMinutes(slot.start);
-          const slotEndMinutes = timeToMinutes(slot.end);
-          const bookingStartMinutes = timeToMinutes(booking.session_start_time);
-          const bookingEndMinutes = timeToMinutes(booking.session_end_time);
-          return (
-            (slotStartMinutes >= bookingStartMinutes &&
-              slotStartMinutes < bookingEndMinutes) ||
-            (slotEndMinutes > bookingStartMinutes &&
-              slotEndMinutes <= bookingEndMinutes)
-          );
-        });
+
+      console.log("existingBookings", existingBookings);
+
+      // Convert existing bookings' times to trainee's time zone only if necessary
+      const normalizedBookings = existingBookings.map(booking => {
+        
+        let startTraineeTime = booking.start_time
+        let endTraineeTime = booking.end_time
+        if(traineeTimeZone!== booking.time_zone){
+          console.log("bookingStrt",booking.start_time, booking.time_zone)
+          startTraineeTime = new Date(CovertTimeAccordingToTimeZone(booking.start_time, {
+          to: traineeTimeZone,
+          from: booking.time_zone,
+        }).ts);
+          endTraineeTime = new Date(CovertTimeAccordingToTimeZone(booking.end_time, {
+          to: traineeTimeZone,
+          from: booking.time_zone,
+        }).ts);
+        }
+        return { start: startTraineeTime, end: endTraineeTime };
       });
-  
+
+      console.log("normalizedBookings",normalizedBookings)
+
+      // Remove overlapping available slots
+      const availableSlots = timeSlots.filter(slot => {
+        return !normalizedBookings.some(booking => isOverlap(slot, booking));
+      });
+
+      console.log("dayAvailability", dayAvailability);
       return ResponseBuilder.data({
-        isAvailable: finalSlots.length > 0,
-        availableSlots: finalSlots,
+        isAvailable: availableSlots.length > 0,
+        availableSlots: availableSlots,
         trainerTimezone: availabilityInfo.timeZone,
-        traineeTimezone: traineeTimeZone,
+        traineeTimezone: availableSlots,
         debug: {
-          traineeOffset,
-          trainerOffset,
           dayOfWeek,
           dayAvailability,
+          existingBookings,
           requestedTimeRange: { from: slotTime.from, to: slotTime.to },
-          slotsBeforeFiltering: adjustedSlots.length,
+          slotsBeforeFiltering: dayAvailability.length,
         },
       });
     } catch (error) {
@@ -652,5 +598,4 @@ export class TraineeService {
       return ResponseBuilder.errorMessage("An error occurred");
     }
   }
-  
 }
