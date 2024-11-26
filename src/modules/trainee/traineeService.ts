@@ -23,6 +23,7 @@ import { CovertTimeAccordingToTimeZone, isOverlap, Utils } from "../../Utils/Uti
 import * as mongoose from "mongoose";
 import { Failure } from "../../helpers/error";
 import { DateTime } from "luxon";
+import SMSService from "../../services/sms-service";
 
 export class TraineeService {
   public log = log.getLogger();
@@ -372,6 +373,13 @@ export class TraineeService {
         null,
         trainerMessageTemplate
       );
+
+      
+      const smsService = new SMSService();
+
+      await smsService.sendSMS(trainerDetails.mobile_no, subject+" With "+traineeDetails.fullname);
+      await smsService.sendSMS(traineeDetails.mobile_no, subject+" With "+trainerDetails.fullname);
+
       if (payload.status === BOOKED_SESSIONS_STATUS["BOOKED"]) {
         SendEmail.sendRawEmail(
           null,

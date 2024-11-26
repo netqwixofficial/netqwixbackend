@@ -24,6 +24,7 @@ import { stripeHelperController } from "../stripe/stripeHelperController";
 import raise_concern from "../../model/raise_concern.schema";
 import { Constant } from "../../Utils/constant";
 import onlineUser from "../../model/online_user.schema";
+import SMSService from "../../services/sms-service";
 const stripe = require("stripe")(process.env.STRIPE_SECRET);
 
 export class UserService {
@@ -62,6 +63,7 @@ export class UserService {
           result.session_start_time,
           result.session_end_time
         );
+        const smsService = new SMSService()
         if (payload.booked_status === BOOKED_SESSIONS_STATUS.confirm) {
           const traineeInfo = await user.findById(
             bookedSessionDetail["trainee_id"]
@@ -91,13 +93,24 @@ export class UserService {
           <img src=${NetquixImage.logo} style="object-fit: contain; width: 180px;"/>
            </div> `
           );
+          await smsService.sendSMS(traineeInfo.mobile_no," NetQwix Training Session has been confirmed you may start the lesson using this link");
+          await smsService.sendSMS(trainerInfo.mobile_no," NetQwix Training Session has been confirmed you may start the lesson using this link");
+
         }
+      
+    
 
         if (
           account_type === AccountType.TRAINER &&
           payload.booked_status === BOOKED_SESSIONS_STATUS.cancel
         ) {
           const payment_intent_id = bookedSessionDetail.payment_intent_id;
+          const traineeInfo = await user.findById(
+            bookedSessionDetail["trainee_id"]
+          );
+          const trainerInfo = await user.findById(
+            bookedSessionDetail["trainer_id"]
+          );
           const intent = await stripe.paymentIntents.retrieve(
             payment_intent_id
           );
@@ -113,6 +126,9 @@ export class UserService {
           await booked_session.findByIdAndUpdate(bookedSessionId, {
             refund_status: "refunded",
           });
+          await smsService.sendSMS(traineeInfo.mobile_no,"session was cancelled. payment will be refunded back to source.");
+          await smsService.sendSMS(trainerInfo.mobile_no,"session cancelled."+ bookedDate+ " " + result.session_start_time+" " + result.session_end_time);
+
         }
         return ResponseBuilder.data(
           { result },
