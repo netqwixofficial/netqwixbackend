@@ -246,76 +246,10 @@ export class UserService {
 
   public async getScheduledMeetings(req) {
     const { authUser, query } = req;
-    const { status } = query;
+    const { status,datetime,timezone } = query;
     try {
       let matchCondition = {};
-      let statusCondition = {};
-      const timeZone = authUser?.extraInfo?.working_hours?.time_zone;
-      const extractTimeOffset = timeZone
-        ? Utils.extractTimeOffset(timeZone)
-        : utcOffset;
-      const currentDateTime = moment().utcOffset(
-        extractTimeOffset || utcOffset
-      );
-      const currentDate = currentDateTime.startOf("day").toDate(); // Start of today
 
-      const currentDateObject = new Date();
-
-      const currentTimeString = currentDateObject.toTimeString().slice(0, 5); // HH:MM format
-
-      if (status) {
-        if (status === BOOKED_SESSIONS_STATUS.upcoming) {
-          statusCondition = {
-            $expr: {
-              $and: [
-                // Check if booked_date is today or in the future
-                {
-                  $gte: [{ $dateToString: { format: "%Y-%m-%d", date: "$booked_date" } },
-                  { $dateToString: { format: "%Y-%m-%d", date: currentDateObject } }]
-                },
-                // For today's date or future dates, check the session_end_time
-                { $gt: ["$session_end_time", currentTimeString] },
-                {
-                  $in: ["$status", [BOOKED_SESSIONS_STATUS.BOOKED, BOOKED_SESSIONS_STATUS.confirm]]
-                }
-              ]
-            }
-          };
-
-        } else if (status === BOOKED_SESSIONS_STATUS.cancel) {
-          statusCondition = {
-            $or: [
-              { status: BOOKED_SESSIONS_STATUS.cancel },
-              {
-                $and: [
-                  { booked_date: { $lt: currentDate } },
-                  { status: BOOKED_SESSIONS_STATUS.BOOKED },
-                ],
-              },
-            ],
-          };
-        } else if (status === BOOKED_SESSIONS_STATUS.completed) {
-          statusCondition = {
-            $expr: {
-              $and: [
-                // Check if booked_date is today or in the past
-                {
-                  $lte: [{ $dateToString: { format: "%Y-%m-%d", date: "$booked_date" } },
-                  { $dateToString: { format: "%Y-%m-%d", date: currentDateObject } }]
-                },
-                // For today's date or past dates, check if the session_end_time has passed
-                { $lte: ["$session_end_time", currentTimeString] },
-                {
-                  $in: ["$status", [BOOKED_SESSIONS_STATUS.BOOKED, BOOKED_SESSIONS_STATUS.confirm]]
-                }
-              ]
-            }
-          };
-
-        } else {
-          statusCondition["status"] = status;
-        }
-      }
       if (authUser && authUser.account_type === AccountType.TRAINER) {
         matchCondition = {
           trainer_id: new Types.ObjectId(authUser._id),
@@ -327,82 +261,90 @@ export class UserService {
       }
       
       const result = await booked_session
-        .aggregate([
-          {
-            $match: { ...matchCondition, ...statusCondition },
+      .aggregate([
+        {
+          $match: { ...matchCondition,
+            time_zone: { $exists: true, $ne: null },
+            start_time: { $exists: true, $ne: null },
+            end_time: { $exists: true, $ne: null },
+            session_end_time: { $exists: true, $ne: null },
+            session_start_time: { $exists: true, $ne: null },
+            booked_date: { $exists: true, $ne: null } },
+        },
+        {
+          $lookup: {
+            from: "users",
+            localField: "trainer_id",
+            foreignField: "_id",
+            as: "trainer_info",
+            pipeline: [
+              {
+                $project: Constant.pipelineUser,
+              },
+            ],
           },
-          {
-            $lookup: {
-              from: "users",
-              localField: "trainer_id",
-              foreignField: "_id",
-              as: "trainer_info",
-              pipeline: [
-                {
-                  $project: Constant.pipelineUser,
-                },
-              ],
-            },
+        },
+        {
+          $lookup: {
+            from: "users",
+            localField: "trainee_id",
+            foreignField: "_id",
+            as: "trainee_info",
+            pipeline: [
+              {
+                $project: Constant.pipelineUser,
+              },
+            ],
           },
-          {
-            $lookup: {
-              from: "users",
-              localField: "trainee_id",
-              foreignField: "_id",
-              as: "trainee_info",
-              pipeline: [
-                {
-                  $project: Constant.pipelineUser,
-                },
-              ],
-            },
+        },
+        {
+          $lookup: {
+            from: "clips",
+            localField: "trainee_clip",
+            foreignField: "_id",
+            as: "trainee_clips",
           },
-          {
-            $lookup: {
-              from: "clips",
-              localField: "trainee_clip",
-              foreignField: "_id",
-              as: "trainee_clips",
-            },
+        },
+        {
+          $unwind: {
+            path: "$trainer_info",
           },
-          {
-            $unwind: {
-              path: "$trainer_info",
-            },
+        },
+        {
+          $unwind: {
+            path: "$trainee_info",
           },
-          {
-            $unwind: {
-              path: "$trainee_info",
-            },
+        },
+        {
+          $project: {
+            _id: 1,
+            status: 1,
+            booked_date: 1,
+            session_start_time: 1,
+            session_end_time: 1,
+            session_link: 1,
+            createdAt: 1,
+            updatedAt: 1,
+            ratings: { $ifNull: ["$ratings", null] },
+            trainer_info: 1,
+            trainee_info: 1,
+            trainee_clips: 1,
+            time_zone: 1,
+            start_time: 1,
+            end_time: 1,
+            report: 1,
+            iceServers: 1
           },
-          {
-            $project: {
-              _id: 1,
-              status: 1,
-              booked_date: 1,
-              session_start_time: 1,
-              session_end_time: 1,
-              session_link: 1,
-              createdAt: 1,
-              updatedAt: 1,
-              ratings: { $ifNull: ["$ratings", null] },
-              trainer_info: 1,
-              trainee_info: 1,
-              trainee_clips: 1,
-              time_zone: 1,
-              start_time: 1,
-              end_time: 1,
-              report: 1,
-              iceServers: 1
-            },
+        },
+        {
+          $sort: {
+            createdAt: -1,
           },
-          {
-            $sort: {
-              createdAt: -1,
-            },
-          },
-        ])
-        .exec();
+        },
+      ])
+      .exec();
+
+
       return ResponseBuilder.data({ data: result }, l10n.t("MEETING_FETCHED"));
     } catch (err) {
       return ResponseBuilder.error(err, l10n.t("ERR_INTERNAL_SERVER"));
