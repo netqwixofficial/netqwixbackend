@@ -17,7 +17,7 @@ const traineeMiddleware = new TraineeMiddleware();
 
 route.use([
   (req, res, next) => {
-    req.byPassRoute = ["/get-trainers-with-slots"];
+    req.byPassRoute = ["/get-trainers-with-slots","/check-slot"];
     next();
   },
   authorizeMiddleware.authorizeUser,
