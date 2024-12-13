@@ -1040,7 +1040,7 @@ export class UserService {
             "trainer_info.commission": "$trainer_info.commission",
             "trainer_info.email": "$trainer_info.email",
             "trainer_info.category": "$trainer_info.category",
-            "trainer_info.profilePicture": "$trainer_info.profile_picture",
+            "trainer_info.profile_picture": "$trainer_info.profile_picture",
             "trainer_info.stripe_account_id": "$trainer_info.stripe_account_id",
             "trainer_info.is_kyc_completed": "$trainer_info.is_kyc_completed",
             "trainer_info.extraInfo": "$trainer_info.extraInfo",

@@ -255,13 +255,7 @@ export class TrainerService {
   }
 
   public async updateProfile(reqBody, authUser): Promise<ResponseBuilder> {
-    const { from, to } = reqBody?.extraInfo?.working_hours || {};
-    const hasTimeConflicts = Utils.hasTimeConflicts(from, to);
-    if (hasTimeConflicts) {
-      return ResponseBuilder.badRequest(
-        "Start time can not be less then or equal to end time"
-      );
-    }
+    
     try {
       await user.findOneAndUpdate(
         { _id: authUser["_id"].toString() },
@@ -270,6 +264,7 @@ export class TrainerService {
       );
       return ResponseBuilder.data({}, l10n.t("PROFILE_UPDATED"));
     } catch (err) {
+      console.log("error,,",err)
       throw err;
     }
   }

@@ -109,7 +109,10 @@ export class traineeController {
 
   public updateProfile = async (req: any, res: Response) => {
     try {
+      console.log("req.body",req.body)
+      console.log("UPDATE_FIELDS",UPDATE_FIELDS)
       const payload = _.pick(req.body, UPDATE_FIELDS.user);
+      console.log("payload",payload)
       const result: ResponseBuilder = await this.traineeService.updateProfile(
         payload,
         req.authUser

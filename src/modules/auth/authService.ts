@@ -29,7 +29,7 @@ export class AuthService {
     this.log.info(createUser);
     let hashPassword: string;
     let account: any;
-  
+    console.log("creating new user",createUser)
     // Check if a referred user with this email exists
     const referredUser = await ReferredUser.findOne({ email: createUser.email });
   
@@ -45,7 +45,26 @@ export class AuthService {
   
     const global_commission = await admin_setting.findOne();
   
-    const updateduserObj = {
+    let updateduserObj: {
+      password: string;
+      login_type: LoginType;
+      is_registered_with_stript: boolean;
+      stripe_account_id: any;
+      commission: any;
+      fullname: string;
+      email: string;
+      mobile_no: string;
+      account_type: AccountType;
+      category?: string;
+      isGoogleRegister?: boolean;
+      extraInfo?: {
+        availabilityInfo: {
+          availability: Record<string, { start: string; end: string }[]>;
+          selectedDuration: number;
+          timeZone: string;
+        };
+      };
+  } = {
       ...createUser,
       password: createUser.password ? hashPassword : null,
       login_type: Boolean(createUser.isGoogleRegister)
@@ -54,7 +73,29 @@ export class AuthService {
       is_registered_with_stript: account?.id ? true : false,
       stripe_account_id: account?.id,
       commission: global_commission?.commission ?? 0,
+
     };
+
+    if (createUser.account_type === AccountType.TRAINER) {
+      updateduserObj = {
+        ...updateduserObj,
+        extraInfo:{
+          availabilityInfo: {
+            availability: {
+              Sun: [{ start: "9:00 AM", end: "5:00 PM" }],
+              Mon: [{ start: "9:00 AM", end: "5:00 PM" }],
+              Tue: [{ start: "9:00 AM", end: "5:00 PM" }],
+              Wed: [{ start: "9:00 AM", end: "5:00 PM" }],
+              Thu: [{ start: "9:00 AM", end: "5:00 PM" }],
+              Fri: [{ start: "9:00 AM", end: "5:00 PM" }],
+              Sat: [{ start: "9:00 AM", end: "5:00 PM" }],
+            },
+            selectedDuration: 15,
+            timeZone: "America/New_York",
+          }
+        },
+      };
+    }
   
     delete createUser.isGoogleRegister;
   
@@ -62,6 +103,7 @@ export class AuthService {
     const userObj = referredUser
       ? new user({ ...updateduserObj, _id: referredUser._id }) // Use referred user's _id
       : new user(updateduserObj); // Create a new user normally
+
   
     await userObj.save();
   

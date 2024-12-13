@@ -197,7 +197,7 @@ export class TraineeService {
             fullname: 1,
             email: 1,
             category: 1,
-            profilePicture: "$profile_picture",
+            profile_picture: "$profile_picture",
             stripe_account_id: 1,
             is_kyc_completed: 1,
             commission: 1,
@@ -461,6 +461,9 @@ export class TraineeService {
 
   public async updateProfile(reqBody, authUser): Promise<ResponseBuilder> {
     try {
+      console.log("reqBody",reqBody)
+      console.log("authUser",authUser)
+
       await user.findOneAndUpdate(
         { _id: authUser["_id"].toString() },
         { $set: { ...reqBody } },
