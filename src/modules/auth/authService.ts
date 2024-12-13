@@ -63,6 +63,7 @@ export class AuthService {
           selectedDuration: number;
           timeZone: string;
         };
+        hourly_rate:string
       };
   } = {
       ...createUser,
@@ -92,7 +93,8 @@ export class AuthService {
             },
             selectedDuration: 15,
             timeZone: "America/New_York",
-          }
+          },
+          hourly_rate: "20"
         },
       };
     }
