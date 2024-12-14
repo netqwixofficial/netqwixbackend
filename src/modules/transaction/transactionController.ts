@@ -20,9 +20,26 @@ export class transactionController {
       }
       const result: ResponseBuilder =
         await this.transactionService.createPaymentIntent(req.body);
-      return res
-        .status(result.code)
-        .send({ status: CONSTANCE.SUCCESS, data: result.result });
+      console.log("result124",result)
+      switch (result.code) {
+        case 200:
+          return res
+            .status(result.code)
+            .send({ status: CONSTANCE.SUCCESS, data: result.result });
+        case 400:
+          return res
+            .status(
+              result.code
+                ? result.code
+                : CONSTANCE.RES_CODE.error.internalServerError
+            )
+            .send({ status: CONSTANCE.FAIL, error: result.error["error"] });
+
+        default:
+          return res
+            .status(result.code)
+            .send({ status: CONSTANCE.SUCCESS, data: result.result });
+      }
     } catch (error) {
       this.logger.error(error);
       return res
@@ -33,14 +50,15 @@ export class transactionController {
     }
   };
 
-  public paymentDetailsByPaymentIntentsId = async (req: Request, res: Response) => {
+  public paymentDetailsByPaymentIntentsId = async (
+    req: Request,
+    res: Response
+  ) => {
     try {
-      const { payment_intent_id } = req.body
+      const { payment_intent_id } = req.body;
       const intent = await stripe.paymentIntents.retrieve(payment_intent_id);
 
-      return res
-        .status(200)
-        .send({ status: CONSTANCE.SUCCESS, data: intent });
+      return res.status(200).send({ status: CONSTANCE.SUCCESS, data: intent });
     } catch (error) {
       this.logger.error(error);
       return res
@@ -53,9 +71,9 @@ export class transactionController {
 
   public createRefundByIntentId = async (req: Request, res: Response) => {
     try {
-      const { payment_intent_id } = req.body
+      const { payment_intent_id } = req.body;
       const intent = await stripe.paymentIntents.retrieve(payment_intent_id);
-      
+
       const latest_charge = intent.latest_charge;
 
       const refund = await stripe.refunds.create({
@@ -64,9 +82,7 @@ export class transactionController {
         refund_application_fee: true,
       });
 
-      return res
-        .status(200)
-        .send({ status: CONSTANCE.SUCCESS, data: refund });
+      return res.status(200).send({ status: CONSTANCE.SUCCESS, data: refund });
     } catch (error) {
       this.logger.error(error);
       return res
