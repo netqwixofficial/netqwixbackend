@@ -74,7 +74,7 @@ export class StripeHelper {
       console.log("=====> stripe_config", stripe_config);
       
       if(stripe_config.amount <= 0){
-        return ResponseBuilder.data({skip:true}, l10n.t("SKIP_TRANSACTION_INTENT"));
+        return ResponseBuilder.data({skip:true}, "SKIP_TRANSACTION_INTENT");
       }
       const paymentIntent = await stripe.paymentIntents.create(stripe_config);
       // Step 5: Create the payment intent
