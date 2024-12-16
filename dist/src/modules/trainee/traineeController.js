@@ -76,7 +76,7 @@ class traineeController {
             catch (err) {
                 this.logger.error(err);
                 return res
-                    .status(err.code)
+                    .status(err.code || 500)
                     .send({ status: constance_1.CONSTANCE.FAIL, error: err.error });
             }
         };
@@ -96,7 +96,10 @@ class traineeController {
         };
         this.updateProfile = async (req, res) => {
             try {
+                console.log("req.body", req.body);
+                console.log("UPDATE_FIELDS", constance_1.UPDATE_FIELDS);
                 const payload = _.pick(req.body, constance_1.UPDATE_FIELDS.user);
+                console.log("payload", payload);
                 const result = await this.traineeService.updateProfile(payload, req.authUser);
                 return res
                     .status(result.code)
@@ -111,7 +114,41 @@ class traineeController {
         };
         this.checkSlotExist = async (req, res) => {
             try {
+                console.log('body', req.body);
                 const result = await this.traineeService.checkSlotExist(req.body);
+                const requestedDate = req.body.booked_date; // Assuming booked_date is a string in "YYYY-MM-DD" format
+                const today = new Date().toISOString().split("T")[0]; // Format today's date as "YYYY-MM-DD"
+                // Filter out past slots if the request is for today's date
+                // Filter out past slots if the request is for today's date
+                if (requestedDate === today) {
+                    const currentTime = new Date();
+                    result.result.availableSlots = result.result.availableSlots.filter((slot) => {
+                        // Create a Date object for the slot's start time on today's date
+                        const slotStartTime = new Date(`${requestedDate}T${slot.start}:00`); // Assuming time format "HH:MM"
+                        // Only keep slots where the start time is later than the current time
+                        return slotStartTime > currentTime;
+                    });
+                }
+                console.log("result", JSON.stringify(result.result));
+                if (result.status === constance_1.CONSTANCE.FAIL) {
+                    return res.status(result?.code || 404).send({ message: result.error });
+                }
+                return res
+                    .status(result?.code || 200)
+                    .send({ status: constance_1.CONSTANCE.SUCCESS, data: result.result });
+            }
+            catch (err) {
+                this.logger.error(err);
+                console.log('err', err);
+                return res
+                    .status(err.code || 500)
+                    .send({ status: constance_1.CONSTANCE.FAIL, error: err });
+            }
+        };
+        this.recentTrainers = async (req, res) => {
+            try {
+                console.log('hello', req.authUser._id);
+                const result = await this.trainerService.recentTrainers(req?.authUser._id);
                 if (result.status === constance_1.CONSTANCE.FAIL) {
                     return res.status(result.code).send({ message: result.error });
                 }
@@ -122,8 +159,8 @@ class traineeController {
             catch (err) {
                 this.logger.error(err);
                 return res
-                    .status(err.code)
-                    .send({ status: constance_1.CONSTANCE.FAIL, error: err.error });
+                    .status(err.code || 500)
+                    .send({ status: constance_1.CONSTANCE.FAIL, error: err.message || "Internal Server Error" });
             }
         };
     }

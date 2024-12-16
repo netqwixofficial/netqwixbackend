@@ -75,6 +75,10 @@ const bookedSessionsSchema = new mongoose_1.Schema({
     application_fee_amount: {
         type: String,
     },
+    iceServers: {
+        type: mongoose_1.Schema.Types.Array,
+        default: [],
+    }
 }, { timestamps: true });
 const booked_session = (0, mongoose_1.model)(tables_1.Tables.booked_sessions, bookedSessionsSchema);
 exports.default = booked_session;

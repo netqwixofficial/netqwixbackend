@@ -161,7 +161,7 @@ exports.handleSocketEvents = handleSocketEvents;
 const listenNotificationEvents = (socket) => {
     try {
         socket.on(constance_1.EVENTS.PUSH_NOTIFICATIONS.ON_SEND, async (payload) => {
-            const { title, description, senderId, receiverId } = payload;
+            const { title, description, senderId, receiverId, bookingInfo } = payload;
             const toUserSocketId = memCache_1.MemCache.getDetail(process.env.SOCKET_CONFIG, receiverId);
             // console.log(toUserSocketId, 'toUserSocketId')
             const sender = await user_schema_1.default.findById(senderId);
@@ -188,6 +188,7 @@ const listenNotificationEvents = (socket) => {
                     name: sender?.fullname,
                     profile_picture: sender?.profile_picture || null,
                 },
+                bookingInfo
             });
             if (subscription) {
                 try {

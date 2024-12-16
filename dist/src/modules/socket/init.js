@@ -10,9 +10,8 @@ class SocketInit {
     constructor() {
         this.logger = logger_1.log.getLogger();
         this.middleware = new authMiddleware_1.AuthMiddleware();
+        this.connectedUsers = new Map(); // Updated to store userId and complete user data
         this.init = (io, app) => {
-            // storing connection in one object for now with their room and socket id.
-            // on new connection
             io.use(async (socket, next) => {
                 const token = socket.handshake.query.authorization;
                 if (token) {
@@ -34,12 +33,15 @@ class SocketInit {
                     socket.emit(constance_1.EVENTS.ON_CONNECT, {
                         msg: "Welcome, Socket Connect Successfully, socket",
                     });
-                    // console.log("=========>user details",socket.user )
+                    // Store the complete user data
+                    this.connectedUsers.set(socket.user._id, { socketId: socket.id, userData: socket.user });
                     memCache_1.MemCache.setDetail(process.env.SOCKET_CONFIG, socket.user._id, socket.id);
-                    // mentioning all pending events
+                    // Handle socket events
                     (0, socket_service_1.handleSocketEvents)(socket);
-                    // on disconnect
+                    // Handle disconnect event
                     onDisconnect(socket);
+                    // Optional: Log all connected users
+                    this.logger.info(`Currently connected users: ${Array.from(this.connectedUsers.keys())}`);
                 }
                 catch (err) {
                     this.logger.info(`After Connection getting ERR -> ${err}`);
@@ -48,11 +50,19 @@ class SocketInit {
             });
             const onDisconnect = (socket) => {
                 socket.on(constance_1.EVENTS.ON_DISCONNECT, async () => {
-                    const me = socket.user._id;
-                    this.logger.info(`User Disconnected ---> ${socket.user._id}`);
-                    memCache_1.MemCache.deleteDetail(process.env.SOCKET_CONFIG, me);
+                    const userId = socket.user._id;
+                    this.logger.info(`User Disconnected ---> ${userId}`);
+                    // Remove the user from the connected users map
+                    this.connectedUsers.delete(userId);
+                    memCache_1.MemCache.deleteDetail(process.env.SOCKET_CONFIG, userId);
+                    // Optional: Log remaining connected users
+                    this.logger.info(`Currently connected users: ${Array.from(this.connectedUsers.keys())}`);
                 });
             };
+        };
+        // Method to retrieve the list of connected users with complete data
+        this.getConnectedUsers = () => {
+            return Array.from(this.connectedUsers.values()); // Return an array of user data objects
         };
     }
 }

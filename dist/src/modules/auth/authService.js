@@ -12,6 +12,7 @@ const sendEmail_1 = require("../../Utils/sendEmail");
 const constance_1 = require("../../config/constance");
 const stripeHelperController_1 = require("../stripe/stripeHelperController");
 const default_admin_setting_schema_1 = require("../../model/default_admin_setting.schema");
+const referred_user_schema_1 = require("../../model/referred.user.schema");
 const stripe = require("stripe")(process.env.STRIPE_SECRET);
 class AuthService {
     constructor() {
@@ -22,6 +23,9 @@ class AuthService {
             this.log.info(createUser);
             let hashPassword;
             let account;
+            console.log("creating new user", createUser);
+            // Check if a referred user with this email exists
+            const referredUser = await referred_user_schema_1.default.findOne({ email: createUser.email });
             if (createUser.password) {
                 hashPassword = await this.bcrypt.getHashedPassword(createUser.password);
             }
@@ -32,7 +36,7 @@ class AuthService {
                 account = await stripeHelperController_1.stripeHelperController.createCustomer(createUser);
             }
             const global_commission = await default_admin_setting_schema_1.default.findOne();
-            const updateduserObj = {
+            let updateduserObj = {
                 ...createUser,
                 password: createUser.password ? hashPassword : null,
                 login_type: Boolean(createUser.isGoogleRegister)
@@ -42,9 +46,37 @@ class AuthService {
                 stripe_account_id: account?.id,
                 commission: global_commission?.commission ?? 0,
             };
+            if (createUser.account_type === authEnum_1.AccountType.TRAINER) {
+                updateduserObj = {
+                    ...updateduserObj,
+                    extraInfo: {
+                        availabilityInfo: {
+                            availability: {
+                                Sun: [{ start: "9:00 AM", end: "5:00 PM" }],
+                                Mon: [{ start: "9:00 AM", end: "5:00 PM" }],
+                                Tue: [{ start: "9:00 AM", end: "5:00 PM" }],
+                                Wed: [{ start: "9:00 AM", end: "5:00 PM" }],
+                                Thu: [{ start: "9:00 AM", end: "5:00 PM" }],
+                                Fri: [{ start: "9:00 AM", end: "5:00 PM" }],
+                                Sat: [{ start: "9:00 AM", end: "5:00 PM" }],
+                            },
+                            selectedDuration: 15,
+                            timeZone: "America/New_York",
+                        },
+                        hourly_rate: "20"
+                    },
+                };
+            }
             delete createUser.isGoogleRegister;
-            const userObj = new user_schema_1.default(updateduserObj);
+            // Create the user object, but replace its _id if referredUser exists
+            const userObj = referredUser
+                ? new user_schema_1.default({ ...updateduserObj, _id: referredUser._id }) // Use referred user's _id
+                : new user_schema_1.default(updateduserObj); // Create a new user normally
             await userObj.save();
+            // Remove the referred user from the ReferredUser collection if it was created from there
+            if (referredUser) {
+                await referred_user_schema_1.default.deleteOne({ _id: referredUser._id });
+            }
             sendEmail_1.SendEmail.sendRawEmail(null, "", [createUser.email], "Welcome to NetQwix's Training Portal", null, `<div style="font-family: Verdana,Arial,Helvetica,sans-serif;font-size: 18px;line-height: 30px;">
         Welcome  <i  style='color:#aebf76'>${createUser.fullname}</i>
         <br/><br/>
@@ -56,7 +88,7 @@ class AuthService {
         <br/><br/>
         Team NetQwix. 
         <br/>
-        <img src=${constance_1.NetquixImage.logo} width='100px' height='100px'/>
+        <img src=${constance_1.NetquixImage.logo} style="object-fit: contain; width: 180px;"/>
         </div> `);
             return responseBuilder_1.ResponseBuilder.data(userObj, l10n.t("USER_CREATED_SUCCESS"));
         };
@@ -137,7 +169,7 @@ class AuthService {
       <br/>
       NetQwix Security.
       <br/>
-      <img src=${constance_1.NetquixImage.logo} width='100px' height='100px'/>
+      <img src=${constance_1.NetquixImage.logo} style="object-fit: contain; width: 180px;"/>
        </div> `);
                 return responseBuilder_1.ResponseBuilder.data({}, l10n.t("RESET_PASSWORD_MAIL_SEND"));
             }

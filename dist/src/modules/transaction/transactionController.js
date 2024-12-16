@@ -19,9 +19,23 @@ class transactionController {
                     });
                 }
                 const result = await this.transactionService.createPaymentIntent(req.body);
-                return res
-                    .status(result.code)
-                    .send({ status: constance_1.CONSTANCE.SUCCESS, data: result.result });
+                console.log("result124", result);
+                switch (result.code) {
+                    case 200:
+                        return res
+                            .status(result.code)
+                            .send({ status: constance_1.CONSTANCE.SUCCESS, data: result.result });
+                    case 400:
+                        return res
+                            .status(result.code
+                            ? result.code
+                            : constance_1.CONSTANCE.RES_CODE.error.internalServerError)
+                            .send({ status: constance_1.CONSTANCE.FAIL, error: result.error["error"] });
+                    default:
+                        return res
+                            .status(result.code)
+                            .send({ status: constance_1.CONSTANCE.SUCCESS, data: result.result });
+                }
             }
             catch (error) {
                 this.logger.error(error);
@@ -34,9 +48,7 @@ class transactionController {
             try {
                 const { payment_intent_id } = req.body;
                 const intent = await stripe.paymentIntents.retrieve(payment_intent_id);
-                return res
-                    .status(200)
-                    .send({ status: constance_1.CONSTANCE.SUCCESS, data: intent });
+                return res.status(200).send({ status: constance_1.CONSTANCE.SUCCESS, data: intent });
             }
             catch (error) {
                 this.logger.error(error);
@@ -55,9 +67,7 @@ class transactionController {
                     reverse_transfer: true,
                     refund_application_fee: true,
                 });
-                return res
-                    .status(200)
-                    .send({ status: constance_1.CONSTANCE.SUCCESS, data: refund });
+                return res.status(200).send({ status: constance_1.CONSTANCE.SUCCESS, data: refund });
             }
             catch (error) {
                 this.logger.error(error);

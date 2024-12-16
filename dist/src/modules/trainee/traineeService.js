@@ -13,6 +13,8 @@ const sendEmail_1 = require("../../Utils/sendEmail");
 const user_schema_1 = require("../../model/user.schema");
 const Utils_1 = require("../../Utils/Utils");
 const mongoose = require("mongoose");
+const luxon_1 = require("luxon");
+const sms_service_1 = require("../../services/sms-service");
 class TraineeService {
     constructor() {
         this.log = logger_1.log.getLogger();
@@ -224,7 +226,7 @@ class TraineeService {
                         fullname: 1,
                         email: 1,
                         category: 1,
-                        profilePicture: "$profile_picture",
+                        profile_picture: "$profile_picture",
                         stripe_account_id: 1,
                         is_kyc_completed: 1,
                         commission: 1,
@@ -246,7 +248,8 @@ class TraineeService {
                 !payload.booked_date ||
                 !payload.session_start_time ||
                 !payload.session_end_time ||
-                !payload.charging_price) {
+                !payload.charging_price ||
+                !payload.time_zone) {
                 const validationError = {
                     type: "BAD_DATA",
                     name: "",
@@ -264,7 +267,11 @@ class TraineeService {
                     payload.session_end_time)) {
                 return responseBuilder_1.ResponseBuilder.badRequest("Invalid time format. Please use HH:mm format.");
             }
-            const sessionObj = new booked_sessions_schema_1.default({ ...payload, trainee_id: _id });
+            const sessionObj = new booked_sessions_schema_1.default({
+                ...payload,
+                trainee_id: _id,
+                time_zone: payload.time_zone,
+            });
             const trainerId = sessionObj["trainer_id"];
             const trainerDetails = await user_schema_1.default.findById({ _id: trainerId });
             const traineeId = sessionObj["trainee_id"];
@@ -284,7 +291,7 @@ class TraineeService {
         <br/><br/>
         Team NetQwix.
         <br/>
-        <img src=${constance_1.NetquixImage.logo} width='100px' height='100px'/>
+        <img src=${constance_1.NetquixImage.logo} style="object-fit: contain; width: 180px;"/>
       </div>`;
             const trainerMessageTemplate = `<div style="font-family: Verdana, Arial, Helvetica, sans-serif; font-size: 18px; line-height: 30px;">
         Dear <i style='color:#ff0000'>${trainerDetails.fullname},</i>
@@ -294,7 +301,7 @@ class TraineeService {
         <br/><br/>
         Team NetQwix.
         <br/>
-        <img src=${constance_1.NetquixImage.logo} width='100px' height='100px'/>
+        <img src=${constance_1.NetquixImage.logo} style="object-fit: contain; width: 180px;"/>
       </div>`;
             const charging_price = `${constance_1.amountType.USD}${+payload.charging_price}.`;
             const paymentConfirmationSubject = "NetQwix payment confirmed";
@@ -309,10 +316,13 @@ class TraineeService {
           <br/>
         	Team NetQwix.
           <br/>
-        	<img src=${constance_1.NetquixImage.logo} width='100px' height='100px'/>
-        	 </div>`;
+        	<img src=${constance_1.NetquixImage.logo} style="object-fit: contain; width: 180px;"/>
+        	</div>`;
             sendEmail_1.SendEmail.sendRawEmail(null, null, traineeDetails.email, subject, null, traineeMessageTemplate);
             sendEmail_1.SendEmail.sendRawEmail(null, null, trainerDetails.email, subject, null, trainerMessageTemplate);
+            const smsService = new sms_service_1.default();
+            await smsService.sendSMS(trainerDetails.mobile_no, subject + " With " + traineeDetails.fullname);
+            await smsService.sendSMS(traineeDetails.mobile_no, subject + " With " + trainerDetails.fullname);
             if (payload.status === constance_1.BOOKED_SESSIONS_STATUS["BOOKED"]) {
                 sendEmail_1.SendEmail.sendRawEmail(null, null, [traineeDetails.email], paymentConfirmationSubject, null, paymentConfirmationMessage);
             }
@@ -363,6 +373,8 @@ class TraineeService {
     }
     async updateProfile(reqBody, authUser) {
         try {
+            console.log("reqBody", reqBody);
+            console.log("authUser", authUser);
             await user_schema_1.default.findOneAndUpdate({ _id: authUser["_id"].toString() }, { $set: { ...reqBody } }, { new: true });
             return responseBuilder_1.ResponseBuilder.data({}, l10n.t("PROFILE_UPDATED"));
         }
@@ -372,70 +384,56 @@ class TraineeService {
     }
     async checkSlotExist(reqBody) {
         try {
-            const { slotTime, trainer_id, booked_date } = reqBody;
+            const { slotTime, trainer_id, booked_date, traineeTimeZone } = reqBody;
+            // Validate required fields
+            if (!slotTime?.from || !slotTime?.to) {
+                return responseBuilder_1.ResponseBuilder.badRequest("Missing slot time", 400);
+            }
+            if (!traineeTimeZone) {
+                return responseBuilder_1.ResponseBuilder.badRequest("Missing trainee timezone", 400);
+            }
+            if (!booked_date) {
+                return responseBuilder_1.ResponseBuilder.badRequest("Missing booked date", 400);
+            }
+            if (!trainer_id) {
+                return responseBuilder_1.ResponseBuilder.badRequest("Missing trainer ID", 400);
+            }
+            // Fetch trainer info
             const trainerInfo = await user_schema_1.default.findById(trainer_id);
-            const { working_hours } = trainerInfo?.extraInfo || {
-                from: "00:00",
-                to: "23:59",
-            };
-            const isFutureOrToday = Utils_1.Utils.isFutureOrToday(booked_date);
-            const isValidTrainerId = (0, mongoose_1.isValidMongoObjectId)(trainer_id);
-            if (!isValidTrainerId || !trainerInfo) {
-                return responseBuilder_1.ResponseBuilder.badRequest("Invalid trainer id", 400);
+            if (!trainerInfo?.extraInfo?.availabilityInfo) {
+                return responseBuilder_1.ResponseBuilder.badRequest("Trainer availability not set", 400);
             }
-            if (!isFutureOrToday) {
-                return responseBuilder_1.ResponseBuilder.badRequest("Please choose either today's date or a future date", 400);
+            const { availabilityInfo } = trainerInfo.extraInfo;
+            console.log("traineeTimeZone", traineeTimeZone);
+            console.log("trainerTimeZone", availabilityInfo.timeZone);
+            // Determine day of the week
+            const date = luxon_1.DateTime.fromISO(booked_date, { zone: 'utc' });
+            const dayOfWeek = date.toFormat("ccc");
+            console.log("date", date);
+            console.log("booked_date", dayOfWeek);
+            const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+            // const dayOfWeek = days[date.getDay()];
+            console.log("availabilityInfo", availabilityInfo);
+            // Get trainer's availability for the day
+            const dayAvailability = availabilityInfo.availability?.[dayOfWeek] || [];
+            if (dayAvailability.length === 0) {
+                return responseBuilder_1.ResponseBuilder.data({
+                    isAvailable: false,
+                    availableSlots: [],
+                    message: "Trainer not available on this day",
+                    trainerTimezone: availabilityInfo.timeZone,
+                    traineeTimezone: traineeTimeZone,
+                });
             }
-            const result = await booked_sessions_schema_1.default
+            const timeSlots = Utils_1.Utils.generateTimeSlots(dayAvailability, availabilityInfo, booked_date, traineeTimeZone);
+            console.log("timeSlots", timeSlots);
+            // Fetch existing bookings
+            const existingBookings = await booked_sessions_schema_1.default
                 .aggregate([
                 {
                     $match: {
                         trainer_id: new mongoose.Types.ObjectId(trainer_id),
                         status: { $ne: constance_1.BOOKED_SESSIONS_STATUS.cancel },
-                        $or: [
-                            {
-                                $and: [
-                                    {
-                                        session_start_time: {
-                                            $lte: working_hours?.from || "00:00",
-                                        },
-                                    },
-                                    {
-                                        session_end_time: {
-                                            $gte: working_hours?.from || "00:00",
-                                        },
-                                    },
-                                ],
-                            },
-                            {
-                                $and: [
-                                    {
-                                        session_start_time: {
-                                            $lte: working_hours?.to || "23:59",
-                                        },
-                                    },
-                                    {
-                                        session_end_time: {
-                                            $gte: working_hours?.to || "23:59",
-                                        },
-                                    },
-                                ],
-                            },
-                            {
-                                $and: [
-                                    {
-                                        session_start_time: {
-                                            $gte: working_hours?.from || "00:00",
-                                        },
-                                    },
-                                    {
-                                        session_end_time: {
-                                            $lte: working_hours?.to || "23:59",
-                                        },
-                                    },
-                                ],
-                            },
-                        ],
                         $expr: {
                             $eq: [
                                 {
@@ -444,27 +442,61 @@ class TraineeService {
                                         date: "$booked_date",
                                     },
                                 },
-                                booked_date,
+                                booked_date.split("T")[0],
                             ],
                         },
                     },
                 },
                 {
                     $project: {
-                        _id: 1,
-                        booked_date: 1,
-                        trainer_id: 1,
-                        trainee_id: 1,
-                        session_start_time: 1,
-                        session_end_time: 1,
+                        start_time: 1,
+                        end_time: 1,
+                        time_zone: 1
                     },
                 },
             ])
                 .exec();
-            return responseBuilder_1.ResponseBuilder.data({ isAvailable: result && result.length ? false : true, result }, l10n.t("SLOT_STATUS"));
+            console.log("existingBookings", existingBookings);
+            // Convert existing bookings' times to trainee's time zone only if necessary
+            const normalizedBookings = existingBookings.map(booking => {
+                let startTraineeTime = booking.start_time;
+                let endTraineeTime = booking.end_time;
+                if (traineeTimeZone !== booking.time_zone) {
+                    console.log("bookingStrt", booking.start_time, booking.time_zone);
+                    startTraineeTime = new Date((0, Utils_1.CovertTimeAccordingToTimeZone)(booking.start_time, {
+                        to: traineeTimeZone,
+                        from: booking.time_zone,
+                    }).ts);
+                    endTraineeTime = new Date((0, Utils_1.CovertTimeAccordingToTimeZone)(booking.end_time, {
+                        to: traineeTimeZone,
+                        from: booking.time_zone,
+                    }).ts);
+                }
+                return { start: startTraineeTime, end: endTraineeTime };
+            });
+            console.log("normalizedBookings", normalizedBookings);
+            // Remove overlapping available slots
+            const availableSlots = timeSlots.filter(slot => {
+                return !normalizedBookings.some(booking => (0, Utils_1.isOverlap)(slot, booking));
+            });
+            console.log("dayAvailability", dayAvailability);
+            return responseBuilder_1.ResponseBuilder.data({
+                isAvailable: availableSlots.length > 0,
+                availableSlots: availableSlots,
+                trainerTimezone: availabilityInfo.timeZone,
+                traineeTimezone: availableSlots,
+                debug: {
+                    dayOfWeek,
+                    dayAvailability,
+                    existingBookings,
+                    requestedTimeRange: { from: slotTime.from, to: slotTime.to },
+                    slotsBeforeFiltering: dayAvailability.length,
+                },
+            });
         }
-        catch (err) {
-            throw err;
+        catch (error) {
+            console.error("Error in checkSlotExist:", error);
+            return responseBuilder_1.ResponseBuilder.errorMessage("An error occurred");
         }
     }
 }

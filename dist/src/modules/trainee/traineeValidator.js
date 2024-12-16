@@ -15,7 +15,7 @@ const userValidatorConstraints_1 = require("../user/userValidatorConstraints");
 class bookSessionModal extends model_1.model {
     constructor(body) {
         super();
-        const { trainer_id, status, booked_date, session_start_time, session_end_time, charging_price, } = body;
+        const { trainer_id, status, booked_date, session_start_time, session_end_time, charging_price, iceServers, time_zone } = body;
         this.trainer_id = trainer_id;
         this.status = status;
         this.booked_date = booked_date;
@@ -23,6 +23,8 @@ class bookSessionModal extends model_1.model {
         this.session_end_time = session_end_time;
         this.session_link = null;
         this.charging_price = charging_price;
+        this.iceServers = iceServers || [];
+        this.time_zone = time_zone;
     }
 }
 exports.bookSessionModal = bookSessionModal;
@@ -56,6 +58,10 @@ __decorate([
     (0, class_validator_1.IsNotEmpty)(),
     (0, class_validator_1.IsNumber)()
 ], bookSessionModal.prototype, "charging_price", void 0);
+__decorate([
+    (0, class_validator_1.IsNotEmpty)(),
+    (0, class_validator_1.IsString)()
+], bookSessionModal.prototype, "time_zone", void 0);
 class bookInstantMeetingModal extends model_1.model {
     constructor(body) {
         super();

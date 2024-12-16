@@ -12,7 +12,15 @@ class transactionService {
         this.createPaymentIntent = async (body) => {
             try {
                 const result = await this.stripeHelper.createPaymentIntent(body);
-                return responseBuilder_1.ResponseBuilder.data(result, l10n.t("TRANSACTION_INTENT_CREATED"));
+                console.log("result", result);
+                switch (result.code) {
+                    case 200:
+                        return responseBuilder_1.ResponseBuilder.data(result, l10n.t("TRANSACTION_INTENT_CREATED"));
+                    case 400:
+                        return responseBuilder_1.ResponseBuilder.badRequest(result, 400);
+                    default:
+                        return responseBuilder_1.ResponseBuilder.data(result, l10n.t("TRANSACTION_INTENT_CREATED"));
+                }
             }
             catch (err) {
                 throw err;
