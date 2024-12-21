@@ -225,17 +225,33 @@ export class UserService {
       if (!userInfo) {
         return ResponseBuilder.data({ userInfo }, "User not found");
       } else {
-        SendEmail.sendRawEmail(
-          null,
-          null,
-          [userInfo?.user_email],
-          `Exclusive Invitation to Join NetQwix Platform!`,
-          null,
-          `<div>
-            <h1>Exclusive Invitation to Join NetQwix Platform!</h1>
-            <p>Please <a href="https://dev.netqwix.com"> click here</a> to join NetQwix.</p>
-          </div>`
-        );
+        console.log("userInfo",userInfo._doc.account_type)
+        if(userInfo._doc.account_type === "Trainee"){
+          SendEmail.sendRawEmail(
+            null,
+            null,
+            [userInfo?.user_email],
+            `Exclusive Invitation to Join NetQwix Platform!`,
+            null,
+            `<div>
+              <h1>Please visit the site.</h1>
+              <p>Please <a href="https://dev.netqwix.com"> click here</a> to join NetQwix.</p>
+            </div>`
+          );
+        }else{
+          SendEmail.sendRawEmail(
+            null,
+            null,
+            [userInfo?.user_email],
+            `Exclusive Invitation to Join NetQwix Platform!`,
+            null,
+            `<div>
+              <h1>Come Book a Session with me</h1>
+              <p>Please <a href="https://dev.netqwix.com"> click here</a> to join NetQwix.</p>
+            </div>`
+          );
+        }
+        
 
         return ResponseBuilder.data({}, "");
       }

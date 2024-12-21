@@ -109,6 +109,7 @@ export const MONGO_DATE_FORMAT = {
 
 export const SessionReminderMinutes = {
   FIFTEEN: 15,
+  FIVE:5
 };
 
 export const mongodbDate = {

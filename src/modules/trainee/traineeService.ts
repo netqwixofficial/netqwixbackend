@@ -320,23 +320,32 @@ export class TraineeService {
       console.log(startTime);
       const endTime = Utils.convertToAmPm(sessionObj["session_end_time"]);
       console.log(endTime);
+
+      const timeZoneInShort = DateTime.now()
+      .setZone(payload.time_zone)
+      .toFormat("ZZZZ");
       const bookedTime = `${startTime} To ${endTime}`;
-      const subject = `NetQwix Training Session Booked for ${bookedDate} at ${bookedTime} EST`;
+      const subjectTrainee = `NetQwix Training Session Booked for ${bookedDate} at ${bookedTime} ${timeZoneInShort}`;
+      const timeZoneInShortForTrainer = DateTime.now()
+      .setZone(trainerDetails.extraInfo.availabilityInfo.timeZone)
+      .toFormat("ZZZZ");
+      const subjectTrainer = `NetQwix Training Session Booked for ${bookedDate} at ${bookedTime} ${timeZoneInShort}`;
       const traineeMessageTemplate = `<div style="font-family: Verdana, Arial, Helvetica, sans-serif; font-size: 18px; line-height: 30px;">
         Dear <i style='color:#ff0000'>${traineeDetails.fullname},</i>
         <br/><br/>
         Thank You for booking your NetQwix Training Session with <i style='color:#ff0000'>${trainerDetails.fullname}</i>.
-        Your session has been booked for <i style='color:#ff0000'>${bookedDate}</i> at <i style='color:#ff0000'>${bookedTime} EST</i>.
+        Your session has been booked for <i style='color:#ff0000'>${bookedDate}</i> at <i style='color:#ff0000'>${bookedTime} ${timeZoneInShort}</i>.
         <br/><br/>
         Team NetQwix.
         <br/>
         <img src=${NetquixImage.logo} style="object-fit: contain; width: 180px;"/>
       </div>`;
+  
       const trainerMessageTemplate = `<div style="font-family: Verdana, Arial, Helvetica, sans-serif; font-size: 18px; line-height: 30px;">
         Dear <i style='color:#ff0000'>${trainerDetails.fullname},</i>
         <br/><br/>
         Thank You for booking your NetQwix Training Session with <i style='color:#ff0000'>${traineeDetails.fullname}</i>.
-        Your session has been booked for <i style='color:#ff0000'>${bookedDate}</i> at <i style='color:#ff0000'>${bookedTime} EST</i>.
+        Your session has been booked for <i style='color:#ff0000'>${bookedDate}</i> at <i style='color:#ff0000'>${bookedTime} ${timeZoneInShortForTrainer}</i>.
         <br/><br/>
         Team NetQwix.
         <br/>
@@ -361,7 +370,7 @@ export class TraineeService {
         null,
         null,
         traineeDetails.email,
-        subject,
+        subjectTrainee,
         null,
         traineeMessageTemplate
       );
@@ -369,7 +378,7 @@ export class TraineeService {
         null,
         null,
         trainerDetails.email,
-        subject,
+        subjectTrainer,
         null,
         trainerMessageTemplate
       );
@@ -377,8 +386,14 @@ export class TraineeService {
       
       const smsService = new SMSService();
 
-      await smsService.sendSMS(trainerDetails.mobile_no, subject+" With "+traineeDetails.fullname);
-      await smsService.sendSMS(traineeDetails.mobile_no, subject+" With "+trainerDetails.fullname);
+      await smsService.sendSMS(
+        trainerDetails.mobile_no,
+        subjectTrainee + " With " + traineeDetails.fullname
+      );
+      await smsService.sendSMS(
+        traineeDetails.mobile_no,
+        subjectTrainer + " With " + trainerDetails.fullname
+      );
 
       if (payload.status === BOOKED_SESSIONS_STATUS["BOOKED"]) {
         SendEmail.sendRawEmail(

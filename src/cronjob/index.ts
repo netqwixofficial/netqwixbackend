@@ -77,7 +77,7 @@ const processBookedSessions = async (
     },
   ];
   const matchedSessions = await booked_session.aggregate(pipeline);
-  sendSessionReminderEmails(matchedSessions);
+  // sendSessionReminderEmails(matchedSessions);
 };
 
 const sendSessionReminderEmails = (matchedSessions: any[]) => {

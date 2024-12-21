@@ -36,7 +36,7 @@ class SMSService {
       return message;
     } catch (error) {
       console.error(`Error sending SMS: ${error.message}`);
-      throw error;
+      // throw error;
     }
   }
 }
