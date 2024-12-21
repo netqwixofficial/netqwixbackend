@@ -26,7 +26,7 @@ const clipSchema = new mongoose_1.Schema({
         type: String,
     },
     user_id: {
-        type: mongoose_1.Schema.Types.ObjectId,
+        type: [mongoose_1.Schema.Types.ObjectId],
         ref: "users",
     },
     user_type: {

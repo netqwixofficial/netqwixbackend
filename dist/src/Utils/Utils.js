@@ -1,13 +1,77 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.Utils = void 0;
+exports.isOverlap = exports.CovertTimeAccordingToTimeZone = exports.getTimeZoneOffset = exports.Utils = void 0;
 const moment = require("moment");
 const constance_1 = require("../config/constance");
+const luxon_1 = require("luxon");
 class Utils {
     static isFutureOrToday(dateString) {
         const inputDate = moment(dateString);
         const today = moment();
         return inputDate.isSameOrAfter(today, "day");
+    }
+    static generateTimeSlots(availability, availabilityInfo, booked_date, traineeTimeZone) {
+        console.log(availability, availabilityInfo);
+        const slots = [];
+        const trainerTimeZone = availabilityInfo.timeZone;
+        const bookedDateTime = luxon_1.DateTime.fromISO(booked_date, {
+            zone: "utc",
+        }).startOf("day");
+        const endOfDay = bookedDateTime.endOf("day");
+        const currentTime = luxon_1.DateTime.fromISO(booked_date, {
+            zone: "utc",
+        });
+        availability.forEach((slot) => {
+            const { start, end } = slot;
+            console.log("slot", slot);
+            // Convert the start and end times to Date objects
+            let startTime = createDateTime(booked_date, start);
+            let endTime = createDateTime(booked_date, end);
+            console.log("booked_date", booked_date);
+            console.log("startTime", startTime.toISO()); // Log ISO string for clarity
+            console.log("endTime", endTime.toISO());
+            // Ensure endTime is after startTime, otherwise return an empty array
+            if (endTime <= startTime) {
+                console.warn(`Invalid time range: start time is later than end time.`);
+                return;
+            }
+            // Check if trainer's and trainee's time zones are different
+            if (trainerTimeZone !== traineeTimeZone) {
+                // Convert time slots to the trainee's time zone
+                startTime = (0, exports.CovertTimeAccordingToTimeZone)(startTime, {
+                    to: traineeTimeZone,
+                    from: trainerTimeZone,
+                });
+                endTime = (0, exports.CovertTimeAccordingToTimeZone)(endTime, {
+                    to: traineeTimeZone,
+                    from: trainerTimeZone,
+                });
+                console.log("startTime (Trainee's TZ)", startTime);
+                console.log("endTime (Trainee's TZ)", endTime);
+            }
+            console.log("bookedDateTime", startTime >= bookedDateTime && endTime <= endOfDay);
+            // Filter out times outside the booked date range (trainee's local day)
+            // Generate time slots with the selected duration
+            while (startTime < endTime) {
+                let endSlotTime = startTime.plus({
+                    minutes: availabilityInfo.selectedDuration,
+                });
+                // Skip the slot if it has already passed
+                console.log("currentTime", currentTime);
+                console.log("startTime", startTime);
+                if (startTime < currentTime) {
+                    console.log(`Skipping expired slot: ${startTime.toISO()}`);
+                }
+                else if (startTime >= bookedDateTime && endSlotTime <= endOfDay) {
+                    const formattedStart = startTime.toFormat("h:mm a");
+                    const formattedEnd = endSlotTime.toFormat("h:mm a");
+                    slots.push({ start: formattedStart, end: formattedEnd });
+                }
+                // Move the start time forward by the selected duration
+                startTime = endSlotTime;
+            }
+        });
+        return slots;
     }
 }
 exports.Utils = Utils;
@@ -81,4 +145,84 @@ Utils.roundedAmount = (amount = 0) => {
     }
     return amount;
 };
+Utils.getTheDay = (inputString) => {
+    // Ensure bookedDate is a Date object
+    const bookedDate = new Date(inputString); // Example date string, replace with actual value
+    const dayOfWeek = bookedDate.toLocaleDateString("en-US", {
+        weekday: "short",
+    });
+    return dayOfWeek; // Should print the day of the week (e.g., 'Thu')
+};
+Utils.convertTo24HourFormat = (time) => {
+    const [hours, minutes, period] = time.split(/[:\s]/);
+    let hour = parseInt(hours, 10);
+    const minute = minutes;
+    // If the time is PM and not 12 PM, add 12 to the hour (e.g., 1 PM becomes 13)
+    if (period === "PM" && hour !== 12) {
+        hour += 12;
+    }
+    // If the time is AM and 12 AM, set hour to 0 (midnight)
+    if (period === "AM" && hour === 12) {
+        hour = 0;
+    }
+    // Format the hour and minute into 24-hour time format
+    const formattedHour = hour.toString().padStart(2, "0"); // Ensure two digits for the hour
+    return `${formattedHour}:${minute}`;
+};
+function formatTimeAMPM(date) {
+    let hours = date.getHours();
+    let minutes = date.getMinutes();
+    let period = hours >= 12 ? "PM" : "AM";
+    // Convert to 12-hour format
+    hours = hours % 12;
+    hours = hours ? hours : 12; // the hour '0' should be '12'
+    minutes = minutes < 10 ? "0" + minutes : minutes;
+    return `${hours}:${minutes} ${period}`;
+}
+function createDateTime(dateTime, time) {
+    const date = dateTime.split("T")[0];
+    return luxon_1.DateTime.fromFormat(`${date} ${time}`, "yyyy-LL-dd h:mm a", {
+        zone: "utc",
+    });
+}
+const getTimeZoneOffset = (timeZone) => {
+    const dateTime = luxon_1.DateTime.now().setZone(timeZone); // Get current time in that zone
+    return dateTime.offset; // Returns offset in minutes
+};
+exports.getTimeZoneOffset = getTimeZoneOffset;
+const CovertTimeAccordingToTimeZone = (time, timeZone) => {
+    // If the time zones are different, calculate the offset difference and adjust time
+    const fromOffset = (0, exports.getTimeZoneOffset)(timeZone.from); // Get the offset for the provided time zone
+    const toOffset = (0, exports.getTimeZoneOffset)(timeZone.to); // Get the offset for the local time zone
+    // Calculate the difference in minutes between the time zones
+    const offsetDifference = toOffset - fromOffset;
+    console.log("Input Time:", time);
+    console.log("Time Zones:", timeZone);
+    let date;
+    // Check if the time is a Date object
+    if (time instanceof Date) {
+        // If it's a Date object, use fromJSDate
+        date = luxon_1.DateTime.fromJSDate(time, { zone: "utc" });
+    }
+    else {
+        // If it's a string, use fromISO
+        date = luxon_1.DateTime.fromISO(time, { zone: "utc" });
+    }
+    console.log("Original DateTime (UTC):", date.toISO());
+    // Apply the offset difference (in minutes) to the DateTime object
+    const adjustedDate = date.plus({ minutes: offsetDifference });
+    console.log("Adjusted DateTime:", adjustedDate.toISO());
+    // Return the adjusted DateTime object
+    return adjustedDate;
+};
+exports.CovertTimeAccordingToTimeZone = CovertTimeAccordingToTimeZone;
+function isOverlap(slot1, slot2) {
+    const start1 = luxon_1.DateTime.fromISO(slot1.start, { zone: 'utc' });
+    const end1 = luxon_1.DateTime.fromISO(slot1.end, { zone: 'utc' });
+    const start2 = luxon_1.DateTime.fromISO(slot2.start, { zone: 'utc' });
+    const end2 = luxon_1.DateTime.fromISO(slot2.end, { zone: 'utc' });
+    // Check if the time ranges overlap
+    return start1 < end2 && end1 > start2;
+}
+exports.isOverlap = isOverlap;
 //# sourceMappingURL=Utils.js.map

@@ -10,32 +10,44 @@ class StripeHelper {
     constructor() {
         this.createPaymentIntent = async (body, currency = "usd") => {
             try {
-                const { amount, destination, commission, customer } = body;
+                const { amount, destination, commission, customer, couponCode } = body;
                 if (typeof amount !== "number") {
                     return responseBuilder_1.ResponseBuilder.badRequest("Invalid amount.");
                 }
                 if (!constance_1.CONSTANCE.supportedCurrencies.includes(currency.toLowerCase())) {
                     return responseBuilder_1.ResponseBuilder.badRequest("Invalid currency.");
                 }
-                // const supportedCurrencies = ["usd", "eur", /* Add other supported currencies */];
-                // if (!supportedCurrencies.includes(currency.toLowerCase())) {
-                //   return ResponseBuilder.badRequest("Invalid currency.");
-                // }
-                // const paymentMethodTypes = [];
-                // const acceptedPaymentMethods = {
-                //   "usd": ["card", "alipay", "klarna", "amazon_pay", "acss_debit", "cashapp", "link", "wechat_pay"],
-                //   "eur": ["eps", "giropay", "p24"]
-                //   // Add other accepted payment methods for different currencies
-                // };
-                // if (acceptedPaymentMethods[currency.toLowerCase()]) {
-                //   paymentMethodTypes.push(...acceptedPaymentMethods[currency.toLowerCase()]);
-                // }
+                // Step 1: Fetch the PromotionCode if a couponCode is provided
+                let promotionCode = null;
+                let discountAmount = 0;
+                console.log("couponCode", couponCode);
+                if (couponCode) {
+                    const promotionCodes = await stripe.promotionCodes.list({
+                        code: couponCode, // Searching for the provided coupon code
+                    });
+                    console.log("promotionCodes", JSON.stringify(promotionCodes));
+                    if (promotionCodes.data.length > 0) {
+                        const coupon = promotionCodes.data[0].coupon; // Access the coupon associated with the promotion code
+                        promotionCode = promotionCodes.data[0].id; // Get the promotion code ID
+                        console.log("promotionCode", promotionCode);
+                        // Step 2: Calculate the discount based on the percent_off in the coupon
+                        if (coupon.percent_off) {
+                            discountAmount = (amount * coupon.percent_off) / 100; // Calculate the discount
+                            console.log("Discount applied:", discountAmount);
+                        }
+                    }
+                    else {
+                        return responseBuilder_1.ResponseBuilder.badRequest("Invalid or expired coupon code.", 400);
+                    }
+                }
+                // Step 3: Apply the discount to the amount
+                const finalAmount = amount - discountAmount; // Subtract the discount from the original amount
+                console.log("Final Amount after Discount:", finalAmount);
+                // Step 4: Create the payment intent parameters
                 const stripe_config = {
-                    // address: 'netquix USA',
-                    amount: Utils_1.Utils.roundedAmount(amount * 100),
-                    currency: "usd",
+                    amount: Utils_1.Utils.roundedAmount(finalAmount * 100),
+                    currency: currency.toLowerCase(),
                     description: "netquix - trainer fees",
-                    // TODO: make it dynamic
                     shipping: {
                         name: "Test user",
                         address: {
@@ -46,80 +58,25 @@ class StripeHelper {
                             country: "US",
                         },
                     },
-                    // payment_method_types: ['card', 'afterpayClearpay', 'klarna', 'wechatPay', 'sepaDebit'],
-                    // payment_method_types:  ['card','alipay', 'klarna'],
-                    // payment_method_types:  ["card", "alipay", "klarna", "amazon_pay", "acss_debit", "cashapp", "link", "wechat_pay"],
                     payment_method_types: ['card', 'amazon_pay', 'cashapp', 'link'],
-                    // payment_method_types: ['card', 'alipay', 'klarna', 'amazon_pay','cashapp', 'link', 'wechat_pay'],
-                    // payment_method_types:  ['card', 'alipay', 'klarna', "amazon_pay","acss_debit","cashapp","link", "wechat_pay", "eps", "giropay", "p24"],
-                    // payment_method_types:  [
-                    //   "amazon_pay", 
-                    //   "alipay", 
-                    //   "alma", 
-                    //   "affirm", 
-                    //   "afterpay_clearpay", 
-                    //   "au_becs_debit", 
-                    //   "acss_debit", 
-                    //   "bacs_debit", 
-                    //   "bancontact", 
-                    //   "blik", 
-                    //   "boleto", 
-                    //   "card", 
-                    //   "cashapp", 
-                    //   "crypto", 
-                    //   "eps", 
-                    //   "fpx", 
-                    //   "giropay", 
-                    //   "grabpay", 
-                    //   "ideal", 
-                    //   "klarna", 
-                    //   "konbini", 
-                    //   "mobilepay", 
-                    //   "multibanco", 
-                    //   "ng_market", 
-                    //   "nz_bank_account", 
-                    //   "oxxo", 
-                    //   "p24", 
-                    //   "pay_by_bank", 
-                    //   "paypal", 
-                    //   "payto", 
-                    //   "rechnung", 
-                    //   "sepa_debit", 
-                    //   "sofort", 
-                    //   "south_korea_market", 
-                    //   "kr_market", 
-                    //   "swish", 
-                    //   "three_d_secure", 
-                    //   "twint", 
-                    //   "upi", 
-                    //   "us_bank_account", 
-                    //   "wechat_pay", 
-                    //   "paynow", 
-                    //   "pix", 
-                    //   "promptpay", 
-                    //   "revolut_pay", 
-                    //   "netbanking", // Wrap in quotes
-                    //   "id_bank_transfer", 
-                    //   "link", 
-                    //   "demo_pay"
-                    // ],
-                    // currency: 'aud',
                     customer: customer ?? "",
-                    // payment_method: defaultPaymentMethod,
-                    // off_session: true,
-                    // confirm: true,
-                    // description: description,
-                    application_fee_amount: Math.round(amount * Number(commission)),
+                    application_fee_amount: Math.round(finalAmount * Number(commission)),
                     transfer_data: {
-                        destination: destination,
-                        //  amount: 2 * 100
+                        destination: destination, // The recipient of the transfer
                     },
                 };
                 console.log("=====> stripe_config", stripe_config);
+                if (stripe_config.amount <= 0) {
+                    return responseBuilder_1.ResponseBuilder.data({ skip: true }, "SKIP_TRANSACTION_INTENT");
+                }
                 const paymentIntent = await stripe.paymentIntents.create(stripe_config);
+                // Step 5: Create the payment intent
+                // Return success response with the payment intent details
                 return responseBuilder_1.ResponseBuilder.data(paymentIntent, l10n.t("TRANSACTION_INTENT_CREATED"));
             }
             catch (err) {
+                // Handle errors
+                console.log("errinpayment", err);
                 if (err["statusCode"]) {
                     return responseBuilder_1.ResponseBuilder.badRequest(err.raw.message, 400);
                 }

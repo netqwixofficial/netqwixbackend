@@ -8,7 +8,6 @@ const schedule_inventory_schema_1 = require("../../model/schedule_inventory.sche
 const constance_1 = require("../../config/constance");
 const user_schema_1 = require("../../model/user.schema");
 const authEnum_1 = require("../auth/authEnum");
-const Utils_1 = require("../../Utils/Utils");
 const availability_schema_1 = require("../../model/availability.schema");
 const mongoose_1 = require("mongoose");
 const booked_sessions_schema_1 = require("../../model/booked_sessions.schema");
@@ -200,16 +199,12 @@ class TrainerService {
         }
     }
     async updateProfile(reqBody, authUser) {
-        const { from, to } = reqBody?.extraInfo?.working_hours || {};
-        const hasTimeConflicts = Utils_1.Utils.hasTimeConflicts(from, to);
-        if (hasTimeConflicts) {
-            return responseBuilder_1.ResponseBuilder.badRequest("Start time can not be less then or equal to end time");
-        }
         try {
             await user_schema_1.default.findOneAndUpdate({ _id: authUser["_id"].toString() }, { $set: { ...reqBody } }, { new: true });
             return responseBuilder_1.ResponseBuilder.data({}, l10n.t("PROFILE_UPDATED"));
         }
         catch (err) {
+            console.log("error,,", err);
             throw err;
         }
     }
@@ -282,6 +277,51 @@ class TrainerService {
         }
         catch (err) {
             return responseBuilder_1.ResponseBuilder.error(err, l10n.t("ERR_INTERNAL_SERVER"));
+        }
+    }
+    async recentTrainers(authUser) {
+        try {
+            const pipeline = [
+                {
+                    '$match': {
+                        'trainee_id': new mongoose_1.default.Types.ObjectId(authUser)
+                    }
+                },
+                {
+                    '$group': {
+                        '_id': '$trainer_id'
+                    }
+                },
+                {
+                    '$lookup': {
+                        'from': 'users',
+                        'localField': '_id',
+                        'foreignField': '_id',
+                        'as': 'trainer',
+                        'pipeline': [
+                            {
+                                '$project': constant_1.Constant.pipelineUser,
+                            }
+                        ],
+                    }
+                },
+                {
+                    '$unwind': {
+                        'path': '$trainer'
+                    }
+                },
+                {
+                    '$replaceRoot': {
+                        'newRoot': '$trainer'
+                    }
+                }
+            ];
+            const result = await booked_sessions_schema_1.default.aggregate(pipeline);
+            return responseBuilder_1.ResponseBuilder.data(result, l10n.t("NO_TRAINERS_FOUND"));
+        }
+        catch (error) {
+            console.log("====+", error);
+            return responseBuilder_1.ResponseBuilder.errorMessage("Internal server error");
         }
     }
 }

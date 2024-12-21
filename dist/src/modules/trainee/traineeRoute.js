@@ -26,5 +26,6 @@ route.post("/book-instant-meeting", traineeMiddleware.isTrainee, V.validate(trai
 route.put("/profile", traineeC.updateProfile);
 // check slot available in given time and for trainer
 route.post("/check-slot", V.validate(traineeValidator_1.checkSlotExistModal), traineeC.checkSlotExist);
+route.get('/recent-trainers', traineeC.recentTrainers);
 exports.traineeRoute = route;
 //# sourceMappingURL=traineeRoute.js.map

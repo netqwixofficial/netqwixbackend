@@ -5,6 +5,7 @@ class Tables {
 }
 exports.Tables = Tables;
 Tables.user = "user";
+Tables.referredUser = "referred_user";
 Tables.master_data = "master_data";
 Tables.schedule_inventory = "schedule_inventory";
 Tables.booked_sessions = "booked_sessions";

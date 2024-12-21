@@ -12,8 +12,9 @@ const class_validator_1 = require("class-validator");
 class createPaymentIntent extends model_1.model {
     constructor(body) {
         super();
-        const { amount } = body;
+        const { amount, couponCode } = body;
         this.amount = amount;
+        this.couponCode = couponCode;
     }
 }
 exports.createPaymentIntent = createPaymentIntent;
@@ -21,4 +22,8 @@ __decorate([
     (0, class_validator_1.IsNotEmpty)(),
     (0, class_validator_1.IsNumber)()
 ], createPaymentIntent.prototype, "amount", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsString)()
+], createPaymentIntent.prototype, "couponCode", void 0);
 //# sourceMappingURL=transactionValidator.js.map

@@ -12,11 +12,11 @@ const mongoose_1 = require("mongoose");
 const authEnum_1 = require("../auth/authEnum");
 const sendEmail_1 = require("../../Utils/sendEmail");
 const Utils_1 = require("../../Utils/Utils");
-const moment = require("moment");
 const stripeHelperController_1 = require("../stripe/stripeHelperController");
 const raise_concern_schema_1 = require("../../model/raise_concern.schema");
 const constant_1 = require("../../Utils/constant");
 const online_user_schema_1 = require("../../model/online_user.schema");
+const sms_service_1 = require("../../services/sms-service");
 const stripe = require("stripe")(process.env.STRIPE_SECRET);
 class UserService {
     constructor() {
@@ -38,6 +38,7 @@ class UserService {
                 const result = await booked_sessions_schema_1.default.findByIdAndUpdate({ _id: bookedSessionId }, { status: payload.booked_status }, { new: true });
                 const bookedDate = Utils_1.Utils.formattedDateMonthDateYear(result.booked_date);
                 const sessionDuration = Utils_1.Utils.timeDurations(result.session_start_time, result.session_end_time);
+                const smsService = new sms_service_1.default();
                 if (payload.booked_status === constance_1.BOOKED_SESSIONS_STATUS.confirm) {
                     const traineeInfo = await user_schema_1.default.findById(bookedSessionDetail["trainee_id"]);
                     const trainerInfo = await user_schema_1.default.findById(bookedSessionDetail["trainer_id"]);
@@ -54,12 +55,18 @@ class UserService {
           <br/>
           Team NetQwix.
           <br/>
-          <img src=${constance_1.NetquixImage.logo} width='100px' height='100px'/>
+          <img src=${constance_1.NetquixImage.logo} style="object-fit: contain; width: 180px;"/>
            </div> `);
+                    const meetingLink = process.env.FRONTEND_URL + "/meeting?id=";
+                    console.log("meeting link", meetingLink + bookedSessionDetail._id);
+                    await smsService.sendSMS(traineeInfo.mobile_no, " NetQwix Training Session has been confirmed you may start the lesson using this link:- " + meetingLink + bookedSessionDetail._id);
+                    await smsService.sendSMS(trainerInfo.mobile_no, " NetQwix Training Session has been confirmed you may start the lesson using this link:- " + meetingLink + bookedSessionDetail._id);
                 }
                 if (account_type === authEnum_1.AccountType.TRAINER &&
                     payload.booked_status === constance_1.BOOKED_SESSIONS_STATUS.cancel) {
                     const payment_intent_id = bookedSessionDetail.payment_intent_id;
+                    const traineeInfo = await user_schema_1.default.findById(bookedSessionDetail["trainee_id"]);
+                    const trainerInfo = await user_schema_1.default.findById(bookedSessionDetail["trainer_id"]);
                     const intent = await stripe.paymentIntents.retrieve(payment_intent_id);
                     const latest_charge = intent.latest_charge;
                     await stripe.refunds.create({
@@ -70,6 +77,8 @@ class UserService {
                     await booked_sessions_schema_1.default.findByIdAndUpdate(bookedSessionId, {
                         refund_status: "refunded",
                     });
+                    await smsService.sendSMS(traineeInfo.mobile_no, "session was cancelled. payment will be refunded back to source.");
+                    await smsService.sendSMS(trainerInfo.mobile_no, "session cancelled." + bookedDate + " " + result.session_start_time + " " + result.session_end_time);
                 }
                 return responseBuilder_1.ResponseBuilder.data({ result }, l10n.t("SESSION_STATUS_UPDATED"));
             }
@@ -157,72 +166,9 @@ class UserService {
     }
     async getScheduledMeetings(req) {
         const { authUser, query } = req;
-        const { status } = query;
+        const { status, datetime, timezone } = query;
         try {
             let matchCondition = {};
-            let statusCondition = {};
-            const timeZone = authUser?.extraInfo?.working_hours?.time_zone;
-            const extractTimeOffset = timeZone
-                ? Utils_1.Utils.extractTimeOffset(timeZone)
-                : constance_1.utcOffset;
-            const currentDateTime = moment().utcOffset(extractTimeOffset || constance_1.utcOffset);
-            const currentDate = currentDateTime.startOf("day").toDate(); // Start of today
-            const currentDateObject = new Date();
-            const currentTimeString = currentDateObject.toTimeString().slice(0, 5); // HH:MM format
-            if (status) {
-                if (status === constance_1.BOOKED_SESSIONS_STATUS.upcoming) {
-                    statusCondition = {
-                        $expr: {
-                            $and: [
-                                // Check if booked_date is today or in the future
-                                {
-                                    $gte: [{ $dateToString: { format: "%Y-%m-%d", date: "$booked_date" } },
-                                        { $dateToString: { format: "%Y-%m-%d", date: currentDateObject } }]
-                                },
-                                // For today's date or future dates, check the session_end_time
-                                { $gt: ["$session_end_time", currentTimeString] },
-                                {
-                                    $in: ["$status", [constance_1.BOOKED_SESSIONS_STATUS.BOOKED, constance_1.BOOKED_SESSIONS_STATUS.confirm]]
-                                }
-                            ]
-                        }
-                    };
-                }
-                else if (status === constance_1.BOOKED_SESSIONS_STATUS.cancel) {
-                    statusCondition = {
-                        $or: [
-                            { status: constance_1.BOOKED_SESSIONS_STATUS.cancel },
-                            {
-                                $and: [
-                                    { booked_date: { $lt: currentDate } },
-                                    { status: constance_1.BOOKED_SESSIONS_STATUS.BOOKED },
-                                ],
-                            },
-                        ],
-                    };
-                }
-                else if (status === constance_1.BOOKED_SESSIONS_STATUS.completed) {
-                    statusCondition = {
-                        $expr: {
-                            $and: [
-                                // Check if booked_date is today or in the past
-                                {
-                                    $lte: [{ $dateToString: { format: "%Y-%m-%d", date: "$booked_date" } },
-                                        { $dateToString: { format: "%Y-%m-%d", date: currentDateObject } }]
-                                },
-                                // For today's date or past dates, check if the session_end_time has passed
-                                { $lte: ["$session_end_time", currentTimeString] },
-                                {
-                                    $in: ["$status", [constance_1.BOOKED_SESSIONS_STATUS.BOOKED, constance_1.BOOKED_SESSIONS_STATUS.confirm]]
-                                }
-                            ]
-                        }
-                    };
-                }
-                else {
-                    statusCondition["status"] = status;
-                }
-            }
             if (authUser && authUser.account_type === authEnum_1.AccountType.TRAINER) {
                 matchCondition = {
                     trainer_id: new mongoose_1.Types.ObjectId(authUser._id),
@@ -236,7 +182,13 @@ class UserService {
             const result = await booked_sessions_schema_1.default
                 .aggregate([
                 {
-                    $match: { ...matchCondition, ...statusCondition },
+                    $match: { ...matchCondition,
+                        time_zone: { $exists: true, $ne: null },
+                        start_time: { $exists: true, $ne: null },
+                        end_time: { $exists: true, $ne: null },
+                        session_end_time: { $exists: true, $ne: null },
+                        session_start_time: { $exists: true, $ne: null },
+                        booked_date: { $exists: true, $ne: null } },
                 },
                 {
                     $lookup: {
@@ -300,6 +252,7 @@ class UserService {
                         start_time: 1,
                         end_time: 1,
                         report: 1,
+                        iceServers: 1
                     },
                 },
                 {
@@ -927,7 +880,7 @@ class UserService {
                         "trainer_info.commission": "$trainer_info.commission",
                         "trainer_info.email": "$trainer_info.email",
                         "trainer_info.category": "$trainer_info.category",
-                        "trainer_info.profilePicture": "$trainer_info.profile_picture",
+                        "trainer_info.profile_picture": "$trainer_info.profile_picture",
                         "trainer_info.stripe_account_id": "$trainer_info.stripe_account_id",
                         "trainer_info.is_kyc_completed": "$trainer_info.is_kyc_completed",
                         "trainer_info.extraInfo": "$trainer_info.extraInfo",

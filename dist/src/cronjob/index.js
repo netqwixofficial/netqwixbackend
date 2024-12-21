@@ -93,7 +93,7 @@ const sendSessionReminderEmails = (matchedSessions) => {
       <br/><br/>
       From,  <br/>
       NetQwix Team. <br/>
-      <img src=${constance_1.NetquixImage.logo} width='100px' height='100px'/>
+      <img src=${constance_1.NetquixImage.logo} style="object-fit: contain; width: 180px;"/>
        </div> `);
         });
     });
