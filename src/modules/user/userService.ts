@@ -480,9 +480,10 @@ export class UserService {
                 ],
               },
               { isPrivate: { $ne: true } },
+              { _id: { $ne: _id } }, // Exclude the logged-in user
             ],
           }
-        : { isPrivate: { $ne: true } };
+        : { isPrivate: { $ne: true }, _id: { $ne: _id } }; // Exclude the logged-in user
   
       // Query the database with the filter
       const trainers = await user.find(searchFilter);

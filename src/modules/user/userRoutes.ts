@@ -72,6 +72,7 @@ route.put(
 
 route.post("/send-friend-request", userC.sendFriendRequest);
 route.post("/accept-friend-request", userC.acceptFriendRequest);
+route.post("/cancel-friend-request", userC.cancelFriendRequest);
 route.post("/reject-friend-request", userC.rejectFriendRequest);
 route.get("/friend-requests", userC.getFriendRequests);
 route.get("/friends", userC.getFriends);

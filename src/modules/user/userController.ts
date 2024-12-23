@@ -390,6 +390,36 @@ export class userController {
       res.status(500).json({ error: "Server error." });
     }
   };
+
+  public cancelFriendRequest = async (req, res) => {
+    const { receiverId } = req.body;
+    const senderId = req.authUser._id.toString();
+  
+    try {
+      const receiver = await user.findById(receiverId);
+      if (!receiver) {
+        return res.status(404).json({ error: "User not found." });
+      }
+  
+      // Find the request
+      const requestIndex = receiver.friendRequests.findIndex(
+        (request) => request.senderId.toString() === senderId
+      );
+  
+      if (requestIndex === -1) {
+        return res.status(400).json({ error: "Friend request not found." });
+      }
+  
+      // Remove the request
+      receiver.friendRequests.splice(requestIndex, 1);
+      await receiver.save();
+  
+      res.status(200).json({ message: "Friend request canceled successfully." });
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ error: "Server error." });
+    }
+  };
   
   public rejectFriendRequest = async (req, res) => {
     const { requestId } = req.body;

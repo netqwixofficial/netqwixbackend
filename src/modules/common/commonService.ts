@@ -1,7 +1,7 @@
-const ffmpeg = require("fluent-ffmpeg");
-const ffmpegInstaller = require("@ffmpeg-installer/ffmpeg");
-const path = require("path");
-const fs = require("fs");
+const ffmpeg = require('fluent-ffmpeg');
+const ffmpegInstaller = require('@ffmpeg-installer/ffmpeg');
+const path = require('path');
+const fs = require('fs');
 import { extname } from "path";
 import {
   allowedImageExtensions,
@@ -95,11 +95,7 @@ export class commonService {
     return url;
   };
 
-  cleanupFiles = (
-    inputPath: string | null,
-    tempOutputPath: string | null,
-    finalOutputPath: string | null
-  ) => {
+  cleanupFiles = (inputPath: string | null, tempOutputPath: string | null, finalOutputPath: string | null) => {
     try {
       if (inputPath && fs.existsSync(inputPath)) {
         fs.unlinkSync(inputPath);
@@ -111,51 +107,40 @@ export class commonService {
         fs.unlinkSync(finalOutputPath);
       }
     } catch (cleanupError) {
-      console.error("Error during cleanup:", cleanupError);
+      console.error('Error during cleanup:', cleanupError);
     }
-  };
+  }
 
-  private async processInvites(
-    invites: string[],
-    referrerUser
-  ): Promise<string[]> {
+  private async processInvites(invites: string[], referrerUser): Promise<string[]> {
     const userIds: string[] = [];
-
+    
     for (const inviteEmail of invites) {
       try {
         // Check if a user with this email already exists in the User collection
         const existingUser = await user.findOne<any>({ email: inviteEmail });
         let emailBody = `
         <div style="font-family: Verdana,Arial,Helvetica,sans-serif;font-size: 18px;line-height: 30px;">
-        Hello ${
-          existingUser
-            ? `<i style='color:#aebf76'>${existingUser.fullname}</i>,`
-            : ""
-        } 
+        Hello ${existingUser ? `<i style='color:#aebf76'>${existingUser.fullname}</i>,` : ''} 
         <br/><br/>
         ${referrerUser.fullname} has shared a video with you! 
         <br/><br/>
-        Please <u style='color:#aebf76'><a href=${process.env.FRONTEND_URL}>${
-          existingUser ? "log in" : "sign up"
-        }</a></u> 
+        Please <u style='color:#aebf76'><a href=${process.env.FRONTEND_URL}>${existingUser ? 'log in' : 'sign up'}</a></u> 
         to check it out and connect with other NetQwix Team Members.
         <br/><br/>
         Team NetQwix. 
         <br/>
-        <img src=${
-          NetquixImage.logo
-        } style="object-fit: contain; width: 180px;"/>
+        <img src=${NetquixImage.logo} style="object-fit: contain; width: 180px;"/>
         </div>`;
 
         if (existingUser) {
           // If the user exists, push their ID into userIds
           userIds.push(existingUser._id);
+
+          
         } else {
           // Check if the email exists in the ReferredUser collection
-          const existingReferredUser = await ReferredUser.findOne<any>({
-            email: inviteEmail,
-          });
-
+          const existingReferredUser = await ReferredUser.findOne<any>({ email: inviteEmail });
+  
           if (existingReferredUser) {
             // If the referred user exists, push their ID into userIds
             userIds.push(existingReferredUser._id);
@@ -165,14 +150,14 @@ export class commonService {
               email: inviteEmail,
               referrerId: referrerUser._id,
             });
-
+  
             // Save the referred user and push their ID into userIds
             const savedReferredUser = await referredUser.save();
             userIds.push(savedReferredUser._id);
           }
         }
-
-        if (referrerUser._id !== existingUser._id) {
+        
+        if(referrerUser._id !== existingUser._id){
           SendEmail.sendRawEmail(
             null,
             "",
@@ -182,26 +167,25 @@ export class commonService {
             emailBody
           );
         }
+
       } catch (error) {
         console.error(`Error processing invite for ${inviteEmail}:`, error);
         // You may want to handle the error further (e.g., log it, throw it, etc.)
       }
     }
-
+  
     return userIds;
   }
+  
 
   public async videoUploadUrl(req: any, res: Response) {
     try {
-      if (!req.body.user_id) {
+      if(!req.body.user_id){
         req.body.user_id = [req?.authUser?._id];
       }
-      if (req.body.invites && Array.isArray(req.body.invites)) {
-        const userIds = await this.processInvites(
-          req.body.invites,
-          req.authUser
-        );
-        req.body.user_id = [...req.body.user_id, ...userIds];
+      if (req.body.invites  && Array.isArray(req.body.invites)) {
+        const userIds = await this.processInvites(req.body.invites, req.authUser);
+        req.body.user_id = [...req.body.user_id ,  ...userIds];
       }
 
       var fileName =
@@ -217,7 +201,7 @@ export class commonService {
       req.body.file_name = fileName;
       req.body.thumbnail = thumbnailFileName;
       const clipObj = new clip(req.body);
-
+      
       await clipObj.save();
 
       let fileUrl = await this.generatePreSignedPutUrl(
@@ -232,7 +216,7 @@ export class commonService {
 
       return res
         .status(CONSTANCE.RES_CODE.success)
-        .json({ success: 1, url: fileUrl, thumbnailURL, clipObj });
+        .json({ success: 1, url: fileUrl, thumbnailURL , clipObj });
     } catch (error) {
       res.status(CONSTANCE.RES_CODE.error.internalServerError).json({
         success: 0,
@@ -345,14 +329,12 @@ export class commonService {
   public async getClips(req: any, res: Response) {
     try {
       const trainee_id = req.body.trainee_id ?? null;
-
+  
       var clips = await clip.aggregate([
         {
           $match: {
-            user_id: {
-              $in: [
-                new mongoose.Types.ObjectId(trainee_id ?? req?.authUser?._id),
-              ],
+            user_id: { 
+              $in: [new mongoose.Types.ObjectId(trainee_id ?? req?.authUser?._id)] 
             },
             $or: [{ status: true }, { status: { $exists: false } }],
           },
@@ -366,7 +348,7 @@ export class commonService {
           },
         },
       ]);
-
+  
       return res.status(CONSTANCE.RES_CODE.success).json({ data: clips });
     } catch (error) {
       res.status(CONSTANCE.RES_CODE.error.internalServerError).json({
@@ -494,41 +476,39 @@ export class commonService {
   public async generateThumbnail(req: any, res: Response) {
     try {
       if (!req.file) {
-        return res
-          .status(400)
-          .json({ success: 0, message: "No video file uploaded." });
+        return res.status(400).json({ success: 0, message: 'No video file uploaded.' });
       }
-
+     
       const inputPath = req.file.path;
-      const thumbnailDir = path.join(__dirname, "..", "thumbnails"); // Adjust this path as needed
+      const thumbnailDir = path.join(__dirname, '..', 'thumbnails'); // Adjust this path as needed
       const outputPath = path.join(thumbnailDir, `${req.file.filename}.jpg`);
-
+  
       // Ensure the thumbnail directory exists
       if (!fs.existsSync(thumbnailDir)) {
         fs.mkdirSync(thumbnailDir, { recursive: true });
       }
-
+  
       return new Promise<void>((resolve, reject) => {
         ffmpeg(inputPath)
           .screenshots({
-            timestamps: ["00:00:01"],
+            timestamps: ['00:00:01'],
             filename: `${req.file.filename}.jpg`,
             folder: thumbnailDir,
-            size: "700x1100",
+            size: '320x240'
           })
-          .on("end", () => {
+          .on('end', () => {
             fs.unlinkSync(inputPath); // Remove the uploaded video file
-
+  
             // Check if the thumbnail file exists
             if (!fs.existsSync(outputPath)) {
-              reject(new Error("Thumbnail file not created"));
+              reject(new Error('Thumbnail file not created'));
               return;
             }
-
+  
             // Send the thumbnail file
             res.sendFile(outputPath, (err) => {
               if (err) {
-                console.error("Error sending file:", err);
+                console.error('Error sending file:', err);
                 reject(err);
               } else {
                 // Remove the thumbnail file after sending
@@ -537,11 +517,12 @@ export class commonService {
               }
             });
           })
-          .on("error", (err) => {
-            console.error("Error generating thumbnail:", err);
+          .on('error', (err) => {
+            console.error('Error generating thumbnail:', err);
             reject(err);
           });
       });
+  
     } catch (error) {
       res.status(CONSTANCE.RES_CODE.error.internalServerError).json({
         success: 0,
@@ -557,17 +538,17 @@ export class commonService {
     //   if (!req.file) {
     //     return res.status(400).json({ success: 0, message: 'No video file uploaded.' });
     //   }
-
+     
     //   inputPath = req.file.path;
     //   const thumbnailDir = path.join(__dirname, '..', 'thumbnails'); // Adjust this path as needed
     //   tempOutputPath = path.join(thumbnailDir, `${req.file.filename}_temp.jpg`);
     //   finalOutputPath = path.join(thumbnailDir, `${req.file.filename}.jpg`);
-
+  
     //   // Ensure the thumbnail directory exists
     //   if (!fs.existsSync(thumbnailDir)) {
     //     fs.mkdirSync(thumbnailDir, { recursive: true });
     //   }
-
+  
     //   await new Promise<void>((resolve, reject) => {
     //     ffmpeg(inputPath!)
     //       .inputOptions(['-ss 00:00:01'])
@@ -603,7 +584,7 @@ export class commonService {
     //       })
     //       .run();
     //   });
-
+  
     // } catch (error) {
     //   console.error('Thumbnail generation error:', error);
     //   this.cleanupFiles(inputPath, tempOutputPath, finalOutputPath);
@@ -631,4 +612,6 @@ export class commonService {
     //   // }
     // }
   }
+
+  
 }
