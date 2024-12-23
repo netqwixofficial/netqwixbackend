@@ -80,7 +80,6 @@ async function updateUserActivity(socket) {
     userId,
   });
 
-  // Handle user disconnection
   socket.on("disconnect", async () => {
     if (!activeUsers[userId]) return;
 
@@ -94,9 +93,16 @@ async function updateUserActivity(socket) {
       userId,
     });
 
-    await onlineUser.deleteOne({
-      trainer_id: userId,
-    });
+    // Update the user's last_activity_time instead of deleting them
+    try {
+      await onlineUser.updateOne(
+        { trainer_id: userId },
+        { $set: { last_activity_time: Date.now() } },
+        { upsert: true } // Ensures the document exists or creates it
+      );
+    } catch (error) {
+      console.error("Error updating last_activity_time on disconnect:", error);
+    }
   });
 
   // Listen for any event to update the user's last activity time
@@ -221,7 +227,7 @@ export const handleSocketEvents = (socket, connections = {}) => {
 const listenNotificationEvents = (socket) => {
   try {
     socket.on(EVENTS.PUSH_NOTIFICATIONS.ON_SEND, async (payload: any) => {
-      const { title, description, senderId, receiverId , bookingInfo } = payload;
+      const { title, description, senderId, receiverId, bookingInfo } = payload;
       const toUserSocketId = MemCache.getDetail(
         process.env.SOCKET_CONFIG,
         receiverId
@@ -251,7 +257,7 @@ const listenNotificationEvents = (socket) => {
           name: sender?.fullname,
           profile_picture: sender?.profile_picture || null,
         },
-        bookingInfo
+        bookingInfo,
       });
       if (subscription) {
         try {
@@ -408,7 +414,7 @@ const listenVideoChunksEvent = (socket) => {
   socket.on("videoUploadData", (data) => {
     videoData = data;
   });
-  
+
   socket.on("chunksCompleted", async () => {
     try {
       console.log("All chunks received", chunks);
@@ -489,19 +495,30 @@ const listenVideoChunksEvent = (socket) => {
       // ];
 
       const ffmpegArgs = [
-        "-f", "webm",
-        "-i", "pipe:0",
-        "-i", logoPath,
+        "-f",
+        "webm",
+        "-i",
+        "pipe:0",
+        "-i",
+        logoPath,
         // "-filter_complex", "scale=1920:1080,overlay=main_w-overlay_w-10:main_h-overlay_h-10",
-        "-filter_complex", "scale=1920:1080[bg];[1:v]scale=iw/5:-1[logo];[bg][logo]overlay=main_w-overlay_w-20:main_h-overlay_h-20:format=auto,format=yuv420p",
-        "-c:v", "libx264",
-        "-preset", "superfast",
-        "-crf", "18",
-        "-c:a", "copy",
-        "-threads", "0",
-        "-movflags", "frag_keyframe+empty_moov",
-        "-f", "mp4",
-        "pipe:1"
+        "-filter_complex",
+        "scale=1920:1080[bg];[1:v]scale=iw/5:-1[logo];[bg][logo]overlay=main_w-overlay_w-20:main_h-overlay_h-20:format=auto,format=yuv420p",
+        "-c:v",
+        "libx264",
+        "-preset",
+        "superfast",
+        "-crf",
+        "18",
+        "-c:a",
+        "copy",
+        "-threads",
+        "0",
+        "-movflags",
+        "frag_keyframe+empty_moov",
+        "-f",
+        "mp4",
+        "pipe:1",
       ];
 
       // ffmpegArgs.push("-v", "debug");
@@ -657,21 +674,32 @@ const listenVideoChunksEvent = (socket) => {
         // ];
 
         const ffmpegArgs = [
-          "-f", "webm",
-          "-i", "pipe:0",
-          "-i", logoPath,
+          "-f",
+          "webm",
+          "-i",
+          "pipe:0",
+          "-i",
+          logoPath,
           // "-filter_complex", "scale=1920:1080,overlay=main_w-overlay_w-10:main_h-overlay_h-10",
-          "-filter_complex", "scale=1920:1080[bg];[1:v]scale=iw/5:-1[logo];[bg][logo]overlay=main_w-overlay_w-20:main_h-overlay_h-20:format=auto,format=yuv420p",
-          "-c:v", "libx264",
-          "-preset", "superfast",
-          "-crf", "18",
-          "-c:a", "copy",
-          "-threads", "0",
-          "-movflags", "frag_keyframe+empty_moov",
-          "-f", "mp4",
-          "pipe:1"
+          "-filter_complex",
+          "scale=1920:1080[bg];[1:v]scale=iw/5:-1[logo];[bg][logo]overlay=main_w-overlay_w-20:main_h-overlay_h-20:format=auto,format=yuv420p",
+          "-c:v",
+          "libx264",
+          "-preset",
+          "superfast",
+          "-crf",
+          "18",
+          "-c:a",
+          "copy",
+          "-threads",
+          "0",
+          "-movflags",
+          "frag_keyframe+empty_moov",
+          "-f",
+          "mp4",
+          "pipe:1",
         ];
-        
+
         // ffmpegArgs.push("-v", "debug");
         ffmpegProcess = spawn("ffmpeg", ffmpegArgs);
         ffmpegProcess.stdin.write(combinedBuffer);
@@ -905,7 +933,6 @@ const listenVideoChunksEvent = (socket) => {
   //   }
   // });
 };
-
 
 /**
   * Position:

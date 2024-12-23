@@ -45,5 +45,6 @@
   "SAVED_SESSION_FOUND":"Saved session not found",
   "SAVED_SESSION_GET":"Saved session get successfully",
   "GET_ALL_TRAINERS": "Successfully fetched all trainers",
+  "GET_ALL_USERS": "Successfully fetched all trainers",
   "GET_ALL_TRAINEES": "Successfully fetched all trainees"
 }

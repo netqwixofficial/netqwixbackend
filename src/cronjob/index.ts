@@ -122,7 +122,12 @@ const sendSessionReminderEmails = (matchedSessions: any[]) => {
 
 async function cleanupInactiveUsers() {
   console.log("=====>JOBS RUN ONLINE USER")
-  const inactiveThreshold = 10 * 60 * 1000; 
+ // Define the inactivity threshold (2 hours in milliseconds)
+  const inactiveThresholdHours = 2; 
+  const inactiveThreshold = inactiveThresholdHours * 60 * 60 * 1000; // Convert to milliseconds
+
+  // Calculate the cutoff time for inactive users
+  const cutoffTime = new Date(Date.now() - inactiveThreshold);
 
   try {
     await onlineUser.deleteMany({

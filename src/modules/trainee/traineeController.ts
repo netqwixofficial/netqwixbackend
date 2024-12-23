@@ -120,6 +120,15 @@ export class traineeController {
       const trainee = await user.findById(result.result.trainee_id);
       const trainer = await user.findById(result.result.trainer_id);
 
+      if(!trainee.isPrivate && !trainer.isPrivate){
+        trainee.friends.push(trainer);
+        trainer.friends.push(trainee);
+  
+        await trainee.save();
+        await trainer.save();
+      }
+
+
       if (!trainee) {
         return ResponseBuilder.errorMessage("User not found.");
       }

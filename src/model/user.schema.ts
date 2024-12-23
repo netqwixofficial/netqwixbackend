@@ -1,6 +1,7 @@
 import { Schema, model as Model } from "mongoose";
 import { Tables } from "../config/tables";
 import { AccountType, LoginType } from "../modules/auth/authEnum";
+import { ObjectId } from "mongodb";
 
 const userSchema: Schema = new Schema(
   {
@@ -55,7 +56,18 @@ const userSchema: Schema = new Schema(
     subscriptionId : {
       type: String,
       default : null
-    }
+    },
+    isPrivate: {
+      type: Boolean,
+      default: false, // Default to false so users appear in search by default
+    },
+    friends: [{ type: ObjectId, ref: 'user' }], // List of friends
+    friendRequests: [
+      {
+        senderId: { type: Schema.Types.ObjectId, ref: 'user' },
+        receiverId: { type: Schema.Types.ObjectId, ref: 'user' },
+      },
+    ],
   },
   { timestamps: true }
 );

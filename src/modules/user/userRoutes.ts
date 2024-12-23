@@ -70,7 +70,15 @@ route.put(
   isValidMongoMiddleware.isValidTokenInReqParams,
   userC.addTraineeClip);
 
+route.post("/send-friend-request", userC.sendFriendRequest);
+route.post("/accept-friend-request", userC.acceptFriendRequest);
+route.post("/reject-friend-request", userC.rejectFriendRequest);
+route.get("/friend-requests", userC.getFriendRequests);
+route.get("/friends", userC.getFriends);
+route.post("/remove-friend", userC.removeFriend);
+route.post("/update-account-privacy",userC.updateIsPrivate);
 route.get("/get-all-trainee",userC.getAllTrainee);
+route.get("/get-all-users",userC.getAllUsers);
 route.get("/get-all-trainer",userC.getAllTrainers);
 route.put("/update-trainer-commission",userC.updateTrainerCommossion);
 route.post("/register-user-with-stripe",userC.updateIsRegisteredWithStript);

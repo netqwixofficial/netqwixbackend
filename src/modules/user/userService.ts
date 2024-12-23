@@ -1,7 +1,6 @@
 import { ResponseBuilder } from "../../helpers/responseBuilder";
 import { log } from "../../../logger";
 import * as l10n from "jm-ez-l10n";
-import user from "../../model/user.schema";
 import write_us from "../../model/write_us.schema";
 import { signupModel } from "../auth/authValidator/signup";
 import { updateBookedStatusModal, updateRatings } from "./userValidator";
@@ -13,7 +12,7 @@ import {
   NetquixImage,
   utcOffset,
 } from "../../config/constance";
-import mongoose, { PipelineStage, Types } from "mongoose";
+import mongoose, { ObjectId, PipelineStage, Types } from "mongoose";
 import { AccountType } from "../auth/authEnum";
 import { SendEmail } from "../../Utils/sendEmail";
 import { Utils } from "../../Utils/Utils";
@@ -25,6 +24,7 @@ import raise_concern from "../../model/raise_concern.schema";
 import { Constant } from "../../Utils/constant";
 import onlineUser from "../../model/online_user.schema";
 import SMSService from "../../services/sms-service";
+import user from "../../model/user.schema";
 const stripe = require("stripe")(process.env.STRIPE_SECRET);
 
 export class UserService {
@@ -260,6 +260,26 @@ export class UserService {
     }
   }
 
+  public async updateIsPrivate(userId: ObjectId, isPrivate: boolean) {
+    try {
+      if (typeof isPrivate !== "boolean") {
+        return ResponseBuilder.badRequest("is_private must be a boolean");
+      }
+
+      const updatedUserInfo = await user.findByIdAndUpdate(userId, {
+        isPrivate,
+      }, { new: true });
+
+      if (!updatedUserInfo) {
+        return ResponseBuilder.data([], "User not found");
+      }
+
+      return ResponseBuilder.data(updatedUserInfo, "User privacy setting updated successfully");
+    } catch (err) {
+      return ResponseBuilder.error(err, l10n.t("ERR_INTERNAL_SERVER"));
+    }
+  }
+
   public async getScheduledMeetings(req) {
     const { authUser, query } = req;
     const { status,datetime,timezone } = query;
@@ -440,6 +460,37 @@ export class UserService {
         return ResponseBuilder.data(trainer, "Trainer not found");
       }
       return ResponseBuilder.data(trainer, l10n.t("GET_ALL_TRAINERS"));
+    } catch (err) {
+      return ResponseBuilder.error(err, l10n.t("ERR_INTERNAL_SERVER"));
+    }
+  }
+
+  public async getAllUsers(userInfo: any, searchTerm: string) {
+    try {
+      const { _id } = userInfo;
+  
+      // Define the search filter
+      const searchFilter = searchTerm
+        ? {
+            $and: [
+              {
+                $or: [
+                  { fullname: { $regex: searchTerm, $options: "i" } },
+                  { email: { $regex: searchTerm, $options: "i" } },
+                ],
+              },
+              { isPrivate: { $ne: true } },
+            ],
+          }
+        : { isPrivate: { $ne: true } };
+  
+      // Query the database with the filter
+      const trainers = await user.find(searchFilter);
+  
+      if (!trainers || trainers.length === 0) {
+        return ResponseBuilder.data(trainers, "Users not found");
+      }
+      return ResponseBuilder.data(trainers, l10n.t("GET_ALL_USERS"));
     } catch (err) {
       return ResponseBuilder.error(err, l10n.t("ERR_INTERNAL_SERVER"));
     }

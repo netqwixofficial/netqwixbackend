@@ -5,6 +5,7 @@ import { Request, Response } from "express";
 import { UserService } from "./userService";
 import { updateBookedStatusModal } from "./userValidator";
 import booked_session from "../../model/booked_sessions.schema";
+import user from "../../model/user.schema";
 
 export class userController {
   public userService = new UserService();
@@ -217,6 +218,31 @@ export class userController {
     }
   };
 
+  public getAllUsers = async (req, res) => {
+    try {
+      if (req["authUser"]) {
+        // Extract the search term from the query parameter
+        const searchTerm = req?.query?.search;
+        const result: ResponseBuilder = await this.userService.getAllUsers(
+          req.authUser,searchTerm
+        );
+        if (result.status !== CONSTANCE.FAIL) {
+          res.status(result.code).json(result);
+        } else {
+          res.status(result.code).json({
+            status: result.status,
+            error: result.error,
+            code: CONSTANCE.RES_CODE.error.badRequest,
+          });
+        }
+      }
+    } catch (err) {
+      return res
+        .status(500)
+        .send({ status: CONSTANCE.FAIL, error: err.error });
+    }
+  };
+
   public updateTrainerCommossion = async (req, res) => {
     try {
       if (req["authUser"]) {
@@ -282,7 +308,207 @@ export class userController {
     }
   };
 
+  public sendFriendRequest = async (req, res) => {
+    const { receiverId } = req.body;
+  
+    const senderId = req.authUser._id.toString();
+    if (senderId === receiverId) {
+      return res.status(400).json({ error: "You cannot send a friend request to yourself." });
+    }
+    console.log("senderId",senderId)
+    console.log("receiverId",receiverId)
 
+    try {
+      const receiver = await user.findById(receiverId);
+      const sender = await user.findById(senderId);
+
+      if(sender.isPrivate){
+        return res.status(400).json({ error: "Your account is private,you cannot send a friend request." });
+      }
+      if (!receiver) {
+        return res.status(404).json({ error: "User not found." });
+      }
+  
+      // Check if a request already exists
+      const existingRequest = receiver.friendRequests.find(
+        (request) => request.senderId.toString() === senderId
+      );
+  
+      if (existingRequest) {
+        return res.status(400).json({ error: "Friend request already sent." });
+      }
+  
+      // Add friend request
+      receiver.friendRequests.push({ senderId,receiverId });
+      await receiver.save();
+  
+      res.status(200).json({ message: "Friend request sent successfully." });
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ error: "Server error." });
+    }
+  };
+
+  public acceptFriendRequest = async (req, res) => {
+    const { requestId } = req.body;
+    const userId = req.authUser._id;
+    try {
+      const userDoc = await user.findById(userId);
+      if (!userDoc) {
+        return res.status(404).json({ error: "User not found." });
+      }
+
+      if(userDoc.isPrivate){
+        return res.status(400).json({ error: "Your account is private,you cannot send a friend request." });
+      }
+
+      // Find the request
+      const requestIndex = userDoc.friendRequests.findIndex(
+        (request) => request._id.toString() === requestId
+      );
+
+      if (requestIndex === -1) {
+        return res.status(400).json({ error: "Friend request not found." });
+      }
+
+      const senderId = userDoc.friendRequests[requestIndex].senderId;
+
+      // Add each other as friends
+      userDoc.friends.push(senderId);
+      const senderDoc = await user.findById(senderId);
+      senderDoc.friends.push(userId);
+
+      // Remove the friend request
+      userDoc.friendRequests.splice(requestIndex, 1);
+
+      await userDoc.save();
+      await senderDoc.save();
+
+      res.status(200).json({ message: "Friend request accepted." });
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ error: "Server error." });
+    }
+  };
+  
+  public rejectFriendRequest = async (req, res) => {
+    const { requestId } = req.body;
+    const userId = req.authUser._id;
+    try {
+      const userDoc = await user.findById(userId);
+      if (!userDoc) {
+        return res.status(404).json({ error: "User not found." });
+      }
+
+      // Find the request
+      const requestIndex = userDoc.friendRequests.findIndex(
+        (request) => request._id.toString() === requestId
+      );
+
+      if (requestIndex === -1) {
+        return res.status(400).json({ error: "Friend request not found." });
+      }
+
+      // Remove the request
+      userDoc.friendRequests.splice(requestIndex, 1);
+      await userDoc.save();
+
+      res.status(200).json({ message: "Friend request rejected." });
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ error: "Server error." });
+    }
+  };
+
+  public getFriendRequests = async (req, res) => {
+    try {
+      const tempUser = await user.findById(req.authUser._id).populate('friendRequests.senderId', 'fullname email profile_picture account_type').populate('friendRequests.receiverId', 'fullname email profile_picture account_type');;
+  
+      if (!tempUser) {
+        return res.status(404).json({ error: "User not found." });
+      }
+  
+      res.status(200).json({ friendRequests: tempUser.friendRequests });
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ error: "Server error." });
+    }
+  };
+
+  public removeFriend = async (req, res) => {
+    const { friendId } = req.body;
+    const userId = req.authUser._id;
+    try {
+      const userDoc = await user.findById(userId);
+      const friendDoc = await user.findById(friendId);
+      console.log("userDoc",userId)
+      console.log("friendDoc",friendId)
+
+      if (!userDoc || !friendDoc) {
+        return res.status(404).json({ error: "User not found." });
+      }
+
+      // Remove friend from user's friend list
+      userDoc.friends = userDoc.friends.filter(
+        (friend) => friend.toString() !== friendId
+      );
+
+      // Remove user from friend's friend list
+      friendDoc.friends = friendDoc.friends.filter(
+        (friend) => friend.toString() !== userId.toString()
+      );
+      console.log("userDoc",userDoc.friends)
+      console.log("friendDoc",friendDoc.friends)
+
+      await userDoc.save();
+      await friendDoc.save();
+
+      res.status(200).json({ message: "Friend removed successfully." });
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ error: "Server error." });
+    }
+  };
+  
+  public getFriends = async (req, res) => {
+    try {
+      const userId = req.authUser._id;
+      const userDoc = await user.findById(userId).populate('friends', 'fullname email profile_picture account_type');
+
+      if (!userDoc) {
+        return res.status(404).json({ error: "User not found." });
+      }
+
+      res.status(200).json({ friends: userDoc.friends });
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ error: "Server error." });
+    }
+  };
+
+  public updateIsPrivate = async (req, res) => {
+    try {
+      if (req["authUser"]) {
+        const { isPrivate } = req.body;
+        const userId = req.authUser._id;
+
+        const result: ResponseBuilder = await this.userService.updateIsPrivate(userId, isPrivate);
+        if (result.status !== CONSTANCE.FAIL) {
+          res.status(result.code).json(result);
+        } else {
+          res.status(result.code).json({
+            status: result.status,
+            error: result.error,
+            code: CONSTANCE.RES_CODE.error.badRequest,
+          });
+        }
+      }
+    } catch (err) {
+      return res
+        .status(500)
+        .send({ status: CONSTANCE.FAIL, error: err.error });
+    }
+  };
 
   /**
    * Stripe User KYC
