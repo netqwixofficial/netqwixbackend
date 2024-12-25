@@ -207,13 +207,13 @@ export class traineeController {
 
             await smsService.sendSMS(
               trainer.mobile_no,
-              `REMINDER: Your NetQwix Training Session Starts in ${SessionReminderMinutes.FIVE} minutes at ${result.result.booked_date}` +
+              `REMINDER: Your NetQwix Training Session Starts in ${SessionReminderMinutes.FIVE} minutes` +
                 " With " +
                 trainee.fullname +`. Join with this link ${meetingLink+result.result._id}`
             );
             await smsService.sendSMS(
               trainee.mobile_no,
-              `REMINDER: Your NetQwix Training Session Starts in ${SessionReminderMinutes.FIVE} minutes at ${result.result.booked_date}` +
+              `REMINDER: Your NetQwix Training Session Starts in ${SessionReminderMinutes.FIVE} minutes` +
                 " With " +
                 trainer.fullname +`. Join with this link ${meetingLink+result.result._id}`
             );
@@ -280,14 +280,14 @@ export class traineeController {
 
             await smsService.sendSMS(
               trainer.mobile_no,
-              `REMINDER: Your NetQwix Training Session Starts in ${SessionReminderMinutes.FIVE} minutes at ${covertedBookedTime}` +
+              `REMINDER: Your NetQwix Training Session Starts in ${SessionReminderMinutes.FIVE} minutes` +
                 " With " +
                 trainee.fullname +`. Join with this link ${meetingLink+result.result._id}`
             );
 
             await smsService.sendSMS(
               trainee.mobile_no,
-              `REMINDER: Your NetQwix Training Session Starts in ${SessionReminderMinutes.FIVE} minutes at ${result.result.booked_date}` +
+              `REMINDER: Your NetQwix Training Session Starts in ${SessionReminderMinutes.FIVE} minutes` +
                 " With " +
                 trainer.fullname +`. Join with this link ${meetingLink+result.result._id}`
             );
