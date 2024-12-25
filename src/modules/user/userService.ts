@@ -93,10 +93,10 @@ export class UserService {
           <img src=${NetquixImage.logo} style="object-fit: contain; width: 180px;"/>
            </div> `
           );
-          const meetingLink = process.env.FRONTEND_URL+"/meeting?id="
+          const meetingLink = process.env.FRONTEND_URL_SMS+"/meeting?id="
           console.log("meeting link",meetingLink+bookedSessionDetail._id)
-          await smsService.sendSMS(traineeInfo.mobile_no," NetQwix Training Session has been confirmed you may start the lesson using this link:- "+meetingLink+bookedSessionDetail._id);
-          await smsService.sendSMS(trainerInfo.mobile_no," NetQwix Training Session has been confirmed you may start the lesson using this link:- "+meetingLink+bookedSessionDetail._id);
+          await smsService.sendSMS(traineeInfo.mobile_no," NetQwix Training Session has been confirmed you may start the lesson using this link "+meetingLink+bookedSessionDetail._id);
+          await smsService.sendSMS(trainerInfo.mobile_no," NetQwix Training Session has been confirmed you may start the lesson using this link "+meetingLink+bookedSessionDetail._id);
 
         }
       

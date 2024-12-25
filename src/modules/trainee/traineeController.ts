@@ -12,11 +12,12 @@ import { bookSessionModal } from "./traineeValidator";
 import * as _ from "lodash";
 import { TrainerService } from "../trainer/trainerService";
 import { DateTime } from "luxon";
-const schedule = require('node-schedule');
+const schedule = require("node-schedule");
 import { SendEmail } from "../../Utils/sendEmail";
 import user from "../../model/user.schema";
 import * as cron from "node-cron";
 import SMSService from "../../services/sms-service";
+import { CovertTimeAccordingToTimeZone } from "../../Utils/Utils";
 
 export class traineeController {
   public logger = log.getLogger();
@@ -109,53 +110,50 @@ export class traineeController {
           { $set: { status: true } }
         );
       }
-      console.log("result.result.start_time", result.result.start_time);
-      const startTime = DateTime.fromJSDate(result.result.start_time, {
-        zone: "utc",
-      });
-      const runTime = startTime.minus({ minutes: 5 });
-      console.log("startTime", startTime);
-      console.log("runTime", runTime, runTime.toJSDate());
 
       const trainee = await user.findById(result.result.trainee_id);
       const trainer = await user.findById(result.result.trainer_id);
 
-      if(!trainee.isPrivate && !trainer.isPrivate){
-        trainee.friends.push(trainer);
-        trainer.friends.push(trainee);
-  
+      if (!trainee || !trainer) {
+        return console.error("User not found.");
+      }
+
+      console.log("result.result.start_time", result.result.start_time);
+      const startTime = CovertTimeAccordingToTimeZone(result.result.start_time,{to:"utc",from:result.result.time_zone});
+
+      const runTime = startTime.minus({ minutes: 5 });
+      console.log("startTime", startTime);
+      console.log("runTime", runTime, runTime.toJSDate());
+
+      if (!trainee.isPrivate && !trainer.isPrivate) {
+        if (!trainee.friends.includes(trainer._id)) {
+          trainee.friends.push(trainer._id);
+        }
+        if (!trainer.friends.includes(trainee._id)) {
+          trainer.friends.push(trainee._id);
+        }
+
         await trainee.save();
         await trainer.save();
       }
 
-
-      if (!trainee) {
-        return ResponseBuilder.errorMessage("User not found.");
-      }
-
-      if (!trainer) {
-        return ResponseBuilder.errorMessage("User not found.");
-      }
-
       console.log("datahaiji", result.result);
+      console.log("`${runTime.minute} ${runTime.hour} ${runTime.day} ${runTime.month} *`",`${runTime.minute} ${runTime.hour} ${runTime.day} ${runTime.month} *`)
+      const cronTime = `${runTime.minute} ${runTime.hour} ${runTime.day} ${runTime.month} *`;
 
-        const cronTime = `${runTime.minute} ${runTime.hour} ${runTime.day} ${runTime.month} *`;
+      const meetingLink = process.env.FRONTEND_URL_SMS+"/meeting?id="
+
+      if (
+        trainer.extraInfo.availabilityInfo.timeZone === result.result.time_zone
+      ) {
         cron.schedule(cronTime, async () => {
           try {
-            // Fetch trainee and trainer details
-            const trainee = await user.findById(result.result.trainee_id);
-            const trainer = await user.findById(result.result.trainer_id);
-        
             if (!trainee || !trainer) {
-              return console.error('User not found.');
+              return console.error("User not found.");
             }
-        
-            const timeZoneInShort = DateTime.now()
-              .setZone(result.result.time_zone)
-              .toFormat("ZZZZ");
-        
+
             // Send emails to both the trainee and trainer
-             SendEmail.sendRawEmail(
+            SendEmail.sendRawEmail(
               null,
               null,
               [trainee.email],
@@ -165,7 +163,7 @@ export class traineeController {
                 <i  style='color:#ff0000'>${trainee.fullname},</i>
                 <br/><br/>
                 This is your ${SessionReminderMinutes.FIVE} minute reminder that your Training Session will begin in ${SessionReminderMinutes.FIVE} minutes.
-                ${result.result.booked_date} ${timeZoneInShort}
+                ${result.result.booked_date}
                 <br/><br/>
                 Team NetQwix recommends logging in 2-5 minutes prior to your scheduled session.<br/><br/>
                 Thank You For Booking the Slot in NetQwix.
@@ -175,7 +173,15 @@ export class traineeController {
                 <img src=${NetquixImage.logo} style="object-fit: contain; width: 180px;"/>
               </div>`
             );
-        
+
+            const covertedBookedTime = CovertTimeAccordingToTimeZone(
+              result.result.booked_date,
+              {
+                to: trainer.extraInfo.availabilityInfo.timeZone,
+                from: result.result.time_zone,
+              }
+            );
+
             SendEmail.sendRawEmail(
               null,
               null,
@@ -186,7 +192,7 @@ export class traineeController {
                 <i  style='color:#ff0000'>${trainer.fullname},</i>
                 <br/><br/>
                 This is your ${SessionReminderMinutes.FIVE} minute reminder that your Training Session will begin in ${SessionReminderMinutes.FIVE} minutes.
-                ${result.result.booked_date} ${timeZoneInShort}
+                ${result.result.booked_date}
                 <br/><br/>
                 Team NetQwix recommends logging in 2-5 minutes prior to your scheduled session.<br/><br/>
                 Thank You For Booking the Slot in NetQwix.
@@ -199,11 +205,97 @@ export class traineeController {
 
             const smsService = new SMSService();
 
-            await smsService.sendSMS(trainer.mobile_no, `REMINDER: Your NetQwix Training Session Starts in ${SessionReminderMinutes.FIVE} minutes at ${result.result.booked_date}`+" With "+trainee.fullname);
-            await smsService.sendSMS(trainee.mobile_no, `REMINDER: Your NetQwix Training Session Starts in ${SessionReminderMinutes.FIVE} minutes at ${result.result.booked_date}`+" With "+trainer.fullname);
+            await smsService.sendSMS(
+              trainer.mobile_no,
+              `REMINDER: Your NetQwix Training Session Starts in ${SessionReminderMinutes.FIVE} minutes at ${result.result.booked_date}` +
+                " With " +
+                trainee.fullname +`. Join with this link ${meetingLink+result.result._id}`
+            );
+            await smsService.sendSMS(
+              trainee.mobile_no,
+              `REMINDER: Your NetQwix Training Session Starts in ${SessionReminderMinutes.FIVE} minutes at ${result.result.booked_date}` +
+                " With " +
+                trainer.fullname +`. Join with this link ${meetingLink+result.result._id}`
+            );
           } catch (err) {
             console.error("Error running cron job:", err);
-          }})
+          }
+        });
+      } else {
+        cron.schedule(cronTime, async () => {
+          console.log("Running Cron", cronTime);
+          try {
+            // Send emails to both the trainee and trainer
+            SendEmail.sendRawEmail(
+              null,
+              null,
+              [trainee.email],
+              `REMINDER: Your NetQwix Training Session Starts in ${SessionReminderMinutes.FIVE} minutes at ${result.result.booked_date}`,
+              null,
+              `<div style="font-family: Verdana,Arial,Helvetica,sans-serif;font-size: 18px;line-height: 30px;">
+                  <i  style='color:#ff0000'>${trainee.fullname},</i>
+                  <br/><br/>
+                  This is your ${SessionReminderMinutes.FIVE} minute reminder that your Training Session will begin in ${SessionReminderMinutes.FIVE} minutes.
+                  ${result.result.booked_date}
+                  <br/><br/>
+                  Team NetQwix recommends logging in 2-5 minutes prior to your scheduled session.<br/><br/>
+                  Thank You For Booking the Slot in NetQwix.
+                  <br/><br/>
+                  From,  <br/>
+                  NetQwix Team. <br/>
+                  <img src=${NetquixImage.logo} style="object-fit: contain; width: 180px;"/>
+                </div>`
+            );
+
+            const covertedBookedTime = CovertTimeAccordingToTimeZone(
+              result.result.booked_date,
+              {
+                to: trainer.extraInfo.availabilityInfo.timeZone,
+                from: result.result.time_zone,
+              }
+            );
+
+            SendEmail.sendRawEmail(
+              null,
+              null,
+              [trainer.email],
+              `REMINDER: Your NetQwix Training Session Starts in ${SessionReminderMinutes.FIVE} minutes at ${covertedBookedTime}`,
+              null,
+              `<div style="font-family: Verdana,Arial,Helvetica,sans-serif;font-size: 18px;line-height: 30px;">
+                    <i  style='color:#ff0000'>${trainer.fullname},</i>
+                    <br/><br/>
+                    This is your ${SessionReminderMinutes.FIVE} minute reminder that your Training Session will begin in ${SessionReminderMinutes.FIVE} minutes.
+                    ${covertedBookedTime}
+                    <br/><br/>
+                    Team NetQwix recommends logging in 2-5 minutes prior to your scheduled session.<br/><br/>
+                    Thank You For Booking the Slot in NetQwix.
+                    <br/><br/>
+                    From,  <br/>
+                    NetQwix Team. <br/>
+                    <img src=${NetquixImage.logo} style="object-fit: contain; width: 180px;"/>
+                  </div>`
+            );
+
+            const smsService = new SMSService();
+
+            await smsService.sendSMS(
+              trainer.mobile_no,
+              `REMINDER: Your NetQwix Training Session Starts in ${SessionReminderMinutes.FIVE} minutes at ${covertedBookedTime}` +
+                " With " +
+                trainee.fullname +`. Join with this link ${meetingLink+result.result._id}`
+            );
+
+            await smsService.sendSMS(
+              trainee.mobile_no,
+              `REMINDER: Your NetQwix Training Session Starts in ${SessionReminderMinutes.FIVE} minutes at ${result.result.booked_date}` +
+                " With " +
+                trainer.fullname +`. Join with this link ${meetingLink+result.result._id}`
+            );
+          } catch (err) {
+            console.error("Error running cron job:", err);
+          }
+        });
+      }
 
       return res
         .status(result.code)
@@ -312,12 +404,10 @@ export class traineeController {
         .send({ status: CONSTANCE.SUCCESS, data: result.result });
     } catch (err) {
       this.logger.error(err);
-      return res
-        .status(err.code || 500)
-        .send({
-          status: CONSTANCE.FAIL,
-          error: err.message || "Internal Server Error",
-        });
+      return res.status(err.code || 500).send({
+        status: CONSTANCE.FAIL,
+        error: err.message || "Internal Server Error",
+      });
     }
   };
 }
