@@ -34,6 +34,19 @@ export class UserService {
   ): Promise<ResponseBuilder> {
     this.log.info(createUser);
     const userObj = new user(createUser);
+    const emailTemplate =
+      createUser.account_type === AccountType.TRAINER
+        ? "trainer-join"
+        : "trainee-join";
+
+    SendEmail.sendRawEmail(
+      emailTemplate,
+      null,
+      [createUser.email],
+      "Welcome to Our Platform!", 
+      "Thank you for joining!" 
+    );
+
     await userObj.save();
     return ResponseBuilder.data(createUser, l10n.t("USER_PROFILE_SUCCESS"));
   }

@@ -114,26 +114,40 @@ export class AuthService {
       await ReferredUser.deleteOne({ _id: referredUser._id });
     }
     
+    // SendEmail.sendRawEmail(
+    //   null,
+    //   "",
+    //   [createUser.email],
+    //   "Welcome to NetQwix's Training Portal",
+    //   null,
+    //   `<div style="font-family: Verdana,Arial,Helvetica,sans-serif;font-size: 18px;line-height: 30px;">
+    //     Welcome  <i  style='color:#aebf76'>${createUser.fullname}</i>
+    //     <br/><br/>
+    //     Thank you for joining NetQwix Training Team. We look forward to you using this platform
+    //     to connect with new NetQwix Team Members.
+    //     <br/><br/>
+    //     Please <u style='color:#aebf76'><a href=${process.env.FRONTEND_URL}>click here</a></u> 
+    //     to log in and set up your Trainer Profile and set your Schedule Availability.
+    //     <br/><br/>
+    //     Team NetQwix. 
+    //     <br/>
+    //     <img src=${NetquixImage.logo} style="object-fit: contain; width: 180px;"/>
+    //     </div> `
+    // );
+
+    const emailTemplate =
+    createUser.account_type === AccountType.TRAINER
+      ? "trainer-join"
+      : "trainee-join";
+
     SendEmail.sendRawEmail(
+      emailTemplate,
       null,
-      "",
       [createUser.email],
-      "Welcome to NetQwix's Training Portal",
-      null,
-      `<div style="font-family: Verdana,Arial,Helvetica,sans-serif;font-size: 18px;line-height: 30px;">
-        Welcome  <i  style='color:#aebf76'>${createUser.fullname}</i>
-        <br/><br/>
-        Thank you for joining NetQwix Training Team. We look forward to you using this platform
-        to connect with new NetQwix Team Members.
-        <br/><br/>
-        Please <u style='color:#aebf76'><a href=${process.env.FRONTEND_URL}>click here</a></u> 
-        to log in and set up your Trainer Profile and set your Schedule Availability.
-        <br/><br/>
-        Team NetQwix. 
-        <br/>
-        <img src=${NetquixImage.logo} style="object-fit: contain; width: 180px;"/>
-        </div> `
+      "Welcome to NetQwix!", 
+      "Thank you for joining!" 
     );
+
   
     return ResponseBuilder.data(userObj, l10n.t("USER_CREATED_SUCCESS"));
   };
