@@ -3,6 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const mongoose_1 = require("mongoose");
 const tables_1 = require("../config/tables");
 const authEnum_1 = require("../modules/auth/authEnum");
+const mongodb_1 = require("mongodb");
 const userSchema = new mongoose_1.Schema({
     fullname: {
         type: String,
@@ -55,7 +56,18 @@ const userSchema = new mongoose_1.Schema({
     subscriptionId: {
         type: String,
         default: null
-    }
+    },
+    isPrivate: {
+        type: Boolean,
+        default: false, // Default to false so users appear in search by default
+    },
+    friends: [{ type: mongodb_1.ObjectId, ref: 'user' }],
+    friendRequests: [
+        {
+            senderId: { type: mongoose_1.Schema.Types.ObjectId, ref: 'user' },
+            receiverId: { type: mongoose_1.Schema.Types.ObjectId, ref: 'user' },
+        },
+    ],
 }, { timestamps: true });
 // Add the toJSON method to the schema
 userSchema.methods.toJSON = function () {

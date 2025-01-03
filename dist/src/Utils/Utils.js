@@ -217,10 +217,23 @@ const CovertTimeAccordingToTimeZone = (time, timeZone) => {
 };
 exports.CovertTimeAccordingToTimeZone = CovertTimeAccordingToTimeZone;
 function isOverlap(slot1, slot2) {
-    const start1 = luxon_1.DateTime.fromISO(slot1.start, { zone: 'utc' });
-    const end1 = luxon_1.DateTime.fromISO(slot1.end, { zone: 'utc' });
-    const start2 = luxon_1.DateTime.fromISO(slot2.start, { zone: 'utc' });
-    const end2 = luxon_1.DateTime.fromISO(slot2.end, { zone: 'utc' });
+    const parseSlot1Time = (time) => {
+        // Parse 'h:mm a' format (e.g., '2:30 PM')
+        const today = luxon_1.DateTime.now().set({ hour: 0, minute: 0, second: 0, millisecond: 0 });
+        return luxon_1.DateTime.fromFormat(time, 'h:mm a', { zone: 'utc' }).set({
+            year: today.year,
+            month: today.month,
+            day: today.day,
+        });
+    };
+    console.log("slot1 type", typeof slot1.start, typeof slot1.end);
+    console.log("slot2 type", typeof slot2.start, typeof slot2.end);
+    const start1 = parseSlot1Time(slot1.start);
+    const end1 = parseSlot1Time(slot1.end);
+    const start2 = luxon_1.DateTime.fromJSDate(slot2.start, { zone: 'utc' });
+    const end2 = luxon_1.DateTime.fromJSDate(slot2.end, { zone: 'utc' });
+    console.log("start1", start1, "end1", end1);
+    console.log("start2", start2, "end2", end2);
     // Check if the time ranges overlap
     return start1 < end2 && end1 > start2;
 }

@@ -1,10 +1,10 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.commonService = void 0;
-const ffmpeg = require("fluent-ffmpeg");
-const ffmpegInstaller = require("@ffmpeg-installer/ffmpeg");
-const path = require("path");
-const fs = require("fs");
+const ffmpeg = require('fluent-ffmpeg');
+const ffmpegInstaller = require('@ffmpeg-installer/ffmpeg');
+const path = require('path');
+const fs = require('fs');
 const path_1 = require("path");
 const constance_1 = require("../../config/constance");
 const clip_schema_1 = require("../../model/clip.schema");
@@ -64,7 +64,7 @@ class commonService {
                 }
             }
             catch (cleanupError) {
-                console.error("Error during cleanup:", cleanupError);
+                console.error('Error during cleanup:', cleanupError);
             }
         };
     }
@@ -108,13 +108,11 @@ class commonService {
                 const existingUser = await user_schema_1.default.findOne({ email: inviteEmail });
                 let emailBody = `
         <div style="font-family: Verdana,Arial,Helvetica,sans-serif;font-size: 18px;line-height: 30px;">
-        Hello ${existingUser
-                    ? `<i style='color:#aebf76'>${existingUser.fullname}</i>,`
-                    : ""} 
+        Hello ${existingUser ? `<i style='color:#aebf76'>${existingUser.fullname}</i>,` : ''} 
         <br/><br/>
         ${referrerUser.fullname} has shared a video with you! 
         <br/><br/>
-        Please <u style='color:#aebf76'><a href=${process.env.FRONTEND_URL}>${existingUser ? "log in" : "sign up"}</a></u> 
+        Please <u style='color:#aebf76'><a href=${process.env.FRONTEND_URL}>${existingUser ? 'log in' : 'sign up'}</a></u> 
         to check it out and connect with other NetQwix Team Members.
         <br/><br/>
         Team NetQwix. 
@@ -127,9 +125,7 @@ class commonService {
                 }
                 else {
                     // Check if the email exists in the ReferredUser collection
-                    const existingReferredUser = await referred_user_schema_1.default.findOne({
-                        email: inviteEmail,
-                    });
+                    const existingReferredUser = await referred_user_schema_1.default.findOne({ email: inviteEmail });
                     if (existingReferredUser) {
                         // If the referred user exists, push their ID into userIds
                         userIds.push(existingReferredUser._id);
@@ -283,9 +279,7 @@ class commonService {
                 {
                     $match: {
                         user_id: {
-                            $in: [
-                                new mongoose_1.default.Types.ObjectId(trainee_id ?? req?.authUser?._id),
-                            ],
+                            $in: [new mongoose_1.default.Types.ObjectId(trainee_id ?? req?.authUser?._id)]
                         },
                         $or: [{ status: true }, { status: { $exists: false } }],
                     },
@@ -426,12 +420,10 @@ class commonService {
     async generateThumbnail(req, res) {
         try {
             if (!req.file) {
-                return res
-                    .status(400)
-                    .json({ success: 0, message: "No video file uploaded." });
+                return res.status(400).json({ success: 0, message: 'No video file uploaded.' });
             }
             const inputPath = req.file.path;
-            const thumbnailDir = path.join(__dirname, "..", "thumbnails"); // Adjust this path as needed
+            const thumbnailDir = path.join(__dirname, '..', 'thumbnails'); // Adjust this path as needed
             const outputPath = path.join(thumbnailDir, `${req.file.filename}.jpg`);
             // Ensure the thumbnail directory exists
             if (!fs.existsSync(thumbnailDir)) {
@@ -440,22 +432,22 @@ class commonService {
             return new Promise((resolve, reject) => {
                 ffmpeg(inputPath)
                     .screenshots({
-                    timestamps: ["00:00:01"],
+                    timestamps: ['00:00:01'],
                     filename: `${req.file.filename}.jpg`,
                     folder: thumbnailDir,
-                    size: "700x1100",
+                    size: '320x240'
                 })
-                    .on("end", () => {
+                    .on('end', () => {
                     fs.unlinkSync(inputPath); // Remove the uploaded video file
                     // Check if the thumbnail file exists
                     if (!fs.existsSync(outputPath)) {
-                        reject(new Error("Thumbnail file not created"));
+                        reject(new Error('Thumbnail file not created'));
                         return;
                     }
                     // Send the thumbnail file
                     res.sendFile(outputPath, (err) => {
                         if (err) {
-                            console.error("Error sending file:", err);
+                            console.error('Error sending file:', err);
                             reject(err);
                         }
                         else {
@@ -465,8 +457,8 @@ class commonService {
                         }
                     });
                 })
-                    .on("error", (err) => {
-                    console.error("Error generating thumbnail:", err);
+                    .on('error', (err) => {
+                    console.error('Error generating thumbnail:', err);
                     reject(err);
                 });
             });

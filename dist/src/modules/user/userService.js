@@ -4,7 +4,6 @@ exports.UserService = void 0;
 const responseBuilder_1 = require("../../helpers/responseBuilder");
 const logger_1 = require("../../../logger");
 const l10n = require("jm-ez-l10n");
-const user_schema_1 = require("../../model/user.schema");
 const write_us_schema_1 = require("../../model/write_us.schema");
 const booked_sessions_schema_1 = require("../../model/booked_sessions.schema");
 const constance_1 = require("../../config/constance");
@@ -17,6 +16,7 @@ const raise_concern_schema_1 = require("../../model/raise_concern.schema");
 const constant_1 = require("../../Utils/constant");
 const online_user_schema_1 = require("../../model/online_user.schema");
 const sms_service_1 = require("../../services/sms-service");
+const user_schema_1 = require("../../model/user.schema");
 const stripe = require("stripe")(process.env.STRIPE_SECRET);
 class UserService {
     constructor() {
@@ -25,6 +25,10 @@ class UserService {
     async createNewUser(createUser) {
         this.log.info(createUser);
         const userObj = new user_schema_1.default(createUser);
+        const emailTemplate = createUser.account_type === authEnum_1.AccountType.TRAINER
+            ? "trainer-join"
+            : "trainee-join";
+        sendEmail_1.SendEmail.sendRawEmail(emailTemplate, null, [createUser.email], "Welcome to Our Platform!", "Thank you for joining!");
         await userObj.save();
         return responseBuilder_1.ResponseBuilder.data(createUser, l10n.t("USER_PROFILE_SUCCESS"));
     }
@@ -57,10 +61,10 @@ class UserService {
           <br/>
           <img src=${constance_1.NetquixImage.logo} style="object-fit: contain; width: 180px;"/>
            </div> `);
-                    const meetingLink = process.env.FRONTEND_URL + "/meeting?id=";
+                    const meetingLink = process.env.FRONTEND_URL_SMS + "/meeting?id=";
                     console.log("meeting link", meetingLink + bookedSessionDetail._id);
-                    await smsService.sendSMS(traineeInfo.mobile_no, " NetQwix Training Session has been confirmed you may start the lesson using this link:- " + meetingLink + bookedSessionDetail._id);
-                    await smsService.sendSMS(trainerInfo.mobile_no, " NetQwix Training Session has been confirmed you may start the lesson using this link:- " + meetingLink + bookedSessionDetail._id);
+                    await smsService.sendSMS(traineeInfo.mobile_no, " NetQwix Training Session has been confirmed you may start the lesson using this link " + meetingLink + bookedSessionDetail._id);
+                    await smsService.sendSMS(trainerInfo.mobile_no, " NetQwix Training Session has been confirmed you may start the lesson using this link " + meetingLink + bookedSessionDetail._id);
                 }
                 if (account_type === authEnum_1.AccountType.TRAINER &&
                     payload.booked_status === constance_1.BOOKED_SESSIONS_STATUS.cancel) {
@@ -153,12 +157,38 @@ class UserService {
                 return responseBuilder_1.ResponseBuilder.data({ userInfo }, "User not found");
             }
             else {
-                sendEmail_1.SendEmail.sendRawEmail(null, null, [userInfo?.user_email], `Exclusive Invitation to Join NetQwix Platform!`, null, `<div>
-            <h1>Exclusive Invitation to Join NetQwix Platform!</h1>
-            <p>Please <a href="https://dev.netqwix.com"> click here</a> to join NetQwix.</p>
-          </div>`);
+                console.log("userInfo", userInfo._doc.account_type);
+                if (userInfo._doc.account_type === "Trainee") {
+                    sendEmail_1.SendEmail.sendRawEmail(null, null, [userInfo?.user_email], `Exclusive Invitation to Join NetQwix Platform!`, null, `<div>
+              <h1>Please visit the site.</h1>
+              <p>Please <a href="https://dev.netqwix.com"> click here</a> to join NetQwix.</p>
+            </div>`);
+                }
+                else {
+                    sendEmail_1.SendEmail.sendRawEmail(null, null, [userInfo?.user_email], `Exclusive Invitation to Join NetQwix Platform!`, null, `<div>
+              <h1>Come Book a Session with me</h1>
+              <p>Please <a href="https://dev.netqwix.com"> click here</a> to join NetQwix.</p>
+            </div>`);
+                }
                 return responseBuilder_1.ResponseBuilder.data({}, "");
             }
+        }
+        catch (err) {
+            return responseBuilder_1.ResponseBuilder.error(err, l10n.t("ERR_INTERNAL_SERVER"));
+        }
+    }
+    async updateIsPrivate(userId, isPrivate) {
+        try {
+            if (typeof isPrivate !== "boolean") {
+                return responseBuilder_1.ResponseBuilder.badRequest("is_private must be a boolean");
+            }
+            const updatedUserInfo = await user_schema_1.default.findByIdAndUpdate(userId, {
+                isPrivate,
+            }, { new: true });
+            if (!updatedUserInfo) {
+                return responseBuilder_1.ResponseBuilder.data([], "User not found");
+            }
+            return responseBuilder_1.ResponseBuilder.data(updatedUserInfo, "User privacy setting updated successfully");
         }
         catch (err) {
             return responseBuilder_1.ResponseBuilder.error(err, l10n.t("ERR_INTERNAL_SERVER"));
@@ -327,6 +357,35 @@ class UserService {
                 return responseBuilder_1.ResponseBuilder.data(trainer, "Trainer not found");
             }
             return responseBuilder_1.ResponseBuilder.data(trainer, l10n.t("GET_ALL_TRAINERS"));
+        }
+        catch (err) {
+            return responseBuilder_1.ResponseBuilder.error(err, l10n.t("ERR_INTERNAL_SERVER"));
+        }
+    }
+    async getAllUsers(userInfo, searchTerm) {
+        try {
+            const { _id } = userInfo;
+            // Define the search filter
+            const searchFilter = searchTerm
+                ? {
+                    $and: [
+                        {
+                            $or: [
+                                { fullname: { $regex: searchTerm, $options: "i" } },
+                                { email: { $regex: searchTerm, $options: "i" } },
+                            ],
+                        },
+                        { isPrivate: { $ne: true } },
+                        { _id: { $ne: _id } }, // Exclude the logged-in user
+                    ],
+                }
+                : { isPrivate: { $ne: true }, _id: { $ne: _id } }; // Exclude the logged-in user
+            // Query the database with the filter
+            const trainers = await user_schema_1.default.find(searchFilter);
+            if (!trainers || trainers.length === 0) {
+                return responseBuilder_1.ResponseBuilder.data(trainers, "Users not found");
+            }
+            return responseBuilder_1.ResponseBuilder.data(trainers, l10n.t("GET_ALL_USERS"));
         }
         catch (err) {
             return responseBuilder_1.ResponseBuilder.error(err, l10n.t("ERR_INTERNAL_SERVER"));

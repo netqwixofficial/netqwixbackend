@@ -69,7 +69,7 @@ const processBookedSessions = async (formattedDateTime, currentHour, currentMinu
         },
     ];
     const matchedSessions = await booked_sessions_schema_1.default.aggregate(pipeline);
-    sendSessionReminderEmails(matchedSessions);
+    // sendSessionReminderEmails(matchedSessions);
 };
 const sendSessionReminderEmails = (matchedSessions) => {
     const sessionReminders = matchedSessions.map((session) => {
@@ -101,7 +101,11 @@ const sendSessionReminderEmails = (matchedSessions) => {
 };
 async function cleanupInactiveUsers() {
     console.log("=====>JOBS RUN ONLINE USER");
-    const inactiveThreshold = 10 * 60 * 1000;
+    // Define the inactivity threshold (2 hours in milliseconds)
+    const inactiveThresholdHours = 2;
+    const inactiveThreshold = inactiveThresholdHours * 60 * 60 * 1000; // Convert to milliseconds
+    // Calculate the cutoff time for inactive users
+    const cutoffTime = new Date(Date.now() - inactiveThreshold);
     try {
         await online_user_schema_1.default.deleteMany({
             last_activity_time: { $lt: Date.now() - inactiveThreshold },

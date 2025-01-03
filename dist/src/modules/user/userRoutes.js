@@ -34,7 +34,16 @@ route.post("/invite-friend", userC.inviteFriend);
 route.put('/rating', V.validate(userValidator_1.updateRatings), userM.isBookingExist, userC.updateRatings);
 // to add trainee clip in booked session
 route.put("/add-trainee-clip/:id", isValidMongoMiddleware.isValidTokenInReqParams, userC.addTraineeClip);
+route.post("/send-friend-request", userC.sendFriendRequest);
+route.post("/accept-friend-request", userC.acceptFriendRequest);
+route.post("/cancel-friend-request", userC.cancelFriendRequest);
+route.post("/reject-friend-request", userC.rejectFriendRequest);
+route.get("/friend-requests", userC.getFriendRequests);
+route.get("/friends", userC.getFriends);
+route.post("/remove-friend", userC.removeFriend);
+route.post("/update-account-privacy", userC.updateIsPrivate);
 route.get("/get-all-trainee", userC.getAllTrainee);
+route.get("/get-all-users", userC.getAllUsers);
 route.get("/get-all-trainer", userC.getAllTrainers);
 route.put("/update-trainer-commission", userC.updateTrainerCommossion);
 route.post("/register-user-with-stripe", userC.updateIsRegisteredWithStript);
