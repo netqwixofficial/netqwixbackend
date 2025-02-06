@@ -494,7 +494,7 @@ export class commonService {
             timestamps: ['00:00:01'],
             filename: `${req.file.filename}.jpg`,
             folder: thumbnailDir,
-            size: '320x240'
+            size: "700x1100",
           })
           .on('end', () => {
             fs.unlinkSync(inputPath); // Remove the uploaded video file
