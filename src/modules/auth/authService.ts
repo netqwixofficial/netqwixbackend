@@ -137,8 +137,8 @@ export class AuthService {
 
     const emailTemplate =
     createUser.account_type === AccountType.TRAINER
-      ? "trainer-join"
-      : "trainee-join";
+      ? "trainer-welcome"
+      : "trainee-welcome";
 
     SendEmail.sendRawEmail(
       emailTemplate,
@@ -148,7 +148,6 @@ export class AuthService {
       "Thank you for joining!" 
     );
 
-  
     return ResponseBuilder.data(userObj, l10n.t("USER_CREATED_SUCCESS"));
   };
 
