@@ -217,6 +217,7 @@ export const handleSocketEvents = (socket, connections = {}) => {
   listenDrawEvent(socket);
   stopDrawEvent(socket);
   listenShowVideoEvent(socket);
+  listenVideoPositionEvent(socket)
   listenPlayPauseVideoEvent(socket);
   listenVideoTimeEvent(socket);
   listenVideoShowEvent(socket);
@@ -322,6 +323,22 @@ const listenVideoShowEvent = (socket) => {
         userInfo?.to_user
       );
       socket.to(toUserSocketId).emit(EVENTS.ON_VIDEO_SHOW, socketReq);
+    });
+  } catch (err) {
+    console.log(`while listen draw event `, err);
+    throw err;
+  }
+};
+
+const listenVideoPositionEvent = (socket) => {
+  try {
+    socket.on(EVENTS.ON_VIDEO_ZOOM_PAN, async (socketReq, request) => {
+      const { userInfo } = socketReq;
+      const toUserSocketId = MemCache.getDetail(
+        process.env.SOCKET_CONFIG,
+        userInfo?.to_user
+      );
+      socket.to(toUserSocketId).emit(EVENTS.ON_VIDEO_ZOOM_PAN, socketReq);
     });
   } catch (err) {
     console.log(`while listen draw event `, err);
