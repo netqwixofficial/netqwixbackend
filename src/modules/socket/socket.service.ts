@@ -221,6 +221,8 @@ export const handleSocketEvents = (socket, connections = {}) => {
   listenPlayPauseVideoEvent(socket);
   listenVideoTimeEvent(socket);
   listenVideoShowEvent(socket);
+  listenDrawingModeToggle(socket);
+  listenFullscreenToggle(socket);
   listenVideoChunksEvent(socket);
   listenNotificationEvents(socket);
 };
@@ -325,10 +327,43 @@ const listenVideoShowEvent = (socket) => {
       socket.to(toUserSocketId).emit(EVENTS.ON_VIDEO_SHOW, socketReq);
     });
   } catch (err) {
-    console.log(`while listen draw event `, err);
+    console.log(`while listen video show event `, err);
     throw err;
   }
 };
+
+const listenDrawingModeToggle = (socket) => {
+  try {
+    socket.on(EVENTS.TOGGLE_DRAWING_MODE, async (socketReq, request) => {
+      const { userInfo } = socketReq;
+      const toUserSocketId = MemCache.getDetail(
+        process.env.SOCKET_CONFIG,
+        userInfo?.to_user
+      );
+      socket.to(toUserSocketId).emit(EVENTS.TOGGLE_DRAWING_MODE, socketReq);
+    });
+  } catch (err) {
+    console.log(`while listen drawing mode toggle `, err);
+    throw err;
+  }
+};
+
+const listenFullscreenToggle = (socket) => {
+  try {
+    socket.on(EVENTS.TOGGLE_FULL_SCREEN, async (socketReq, request) => {
+      const { userInfo } = socketReq;
+      const toUserSocketId = MemCache.getDetail(
+        process.env.SOCKET_CONFIG,
+        userInfo?.to_user
+      );
+      socket.to(toUserSocketId).emit(EVENTS.TOGGLE_FULL_SCREEN, socketReq);
+    });
+  } catch (err) {
+    console.log(`while listen fullscreen toggle `, err);
+    throw err;
+  }
+};
+
 
 const listenVideoPositionEvent = (socket) => {
   try {
