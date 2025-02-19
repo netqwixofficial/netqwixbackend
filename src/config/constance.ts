@@ -86,6 +86,7 @@ export class EVENTS {
   public static readonly ON_VIDEO_SHOW = "ON_VIDEO_SHOW";
   public static readonly TOGGLE_DRAWING_MODE = "TOGGLE_DRAWING_MODE";
   public static readonly TOGGLE_FULL_SCREEN = "TOGGLE_FULL_SCREEN";
+  public static readonly TOGGLE_LOCK_MODE = "TOGGLE_LOCK_MODE";
   public static readonly ON_VIDEO_ZOOM_PAN = "ON_VIDEO_ZOOM_PAN";
   public static readonly ON_VIDEO_PLAY_PAUSE = "ON_VIDEO_PLAY_PAUSE";
   public static readonly ON_VIDEO_TIME = "ON_VIDEO_TIME";

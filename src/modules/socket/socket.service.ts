@@ -223,6 +223,8 @@ export const handleSocketEvents = (socket, connections = {}) => {
   listenVideoShowEvent(socket);
   listenDrawingModeToggle(socket);
   listenFullscreenToggle(socket);
+  listenLockModeToggle(socket);
+
   listenVideoChunksEvent(socket);
   listenNotificationEvents(socket);
 };
@@ -363,6 +365,23 @@ const listenFullscreenToggle = (socket) => {
     throw err;
   }
 };
+
+const listenLockModeToggle = (socket) => {
+  try {
+    socket.on(EVENTS.TOGGLE_LOCK_MODE, async (socketReq, request) => {
+      const { userInfo } = socketReq;
+      const toUserSocketId = MemCache.getDetail(
+        process.env.SOCKET_CONFIG,
+        userInfo?.to_user
+      );
+      socket.to(toUserSocketId).emit(EVENTS.TOGGLE_LOCK_MODE, socketReq);
+    });
+  } catch (err) {
+    console.log(`while listen lock mode toggle `, err);
+    throw err;
+  }
+};
+
 
 
 const listenVideoPositionEvent = (socket) => {
