@@ -282,6 +282,27 @@ export class UserService {
     }
   }
 
+  public async updateMobileNumber(userInfo:any, numbers: {old:string,new:string}) {
+    try {
+      console.log("userInfo",userInfo.mobile_no,numbers.old)
+      if (userInfo.mobile_no !== numbers.old) {
+        return ResponseBuilder.badRequest("old password is incorrect.");
+      }
+
+      const updatedUserInfo = await user.findByIdAndUpdate(userInfo._id, {
+        mobile_no:numbers.new,
+      }, { new: true });
+
+      if (!updatedUserInfo) {
+        return ResponseBuilder.data([], "User not found");
+      }
+
+      return ResponseBuilder.data(updatedUserInfo, "User privacy setting updated successfully");
+    } catch (err) {
+      return ResponseBuilder.error(err, l10n.t("ERR_INTERNAL_SERVER"));
+    }
+  }
+
   public async getScheduledMeetings(req) {
     const { authUser, query } = req;
     const { status,datetime,timezone } = query;

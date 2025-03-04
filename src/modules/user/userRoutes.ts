@@ -97,6 +97,7 @@ route.get("/raise-concern",userC.getRaiseConcern);
 route.put("/update-contact-us-status",userC.updateWriteUsTicketStatus);
 route.put("/update-raised-concern-ticket",userC.updateRaiseConcernTicketStatus);
 route.get("/all-online-user",userC.getAllLatestOnlineUser);
+route.put("/update-mobile-number",userC.updateMobileNumber);
 
 
 export const userRoute: Router = route;

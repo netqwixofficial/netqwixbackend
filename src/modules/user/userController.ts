@@ -308,6 +308,27 @@ export class userController {
     }
   };
 
+  public updateMobileNumber = async (req, res) => {
+    try {
+      if (req["authUser"]) {
+        const { oldPhoneNumber, newPhoneNumber } = req.body;
+        const result: ResponseBuilder =
+          await this.userService.updateMobileNumber(req.authUser,{old:oldPhoneNumber,new:newPhoneNumber});
+        if (result.status !== CONSTANCE.FAIL) {
+          res.status(result.code).json(result);
+        } else {
+          res.status(result.code).json({
+            status: result.status,
+            error: result.error,
+            code: CONSTANCE.RES_CODE.error.badRequest,
+          });
+        }
+      }
+    } catch (err) {
+      return res.status(500).send({ status: CONSTANCE.FAIL, error: err.error });
+    }
+  };
+
   public sendFriendRequest = async (req, res) => {
     const { receiverId } = req.body;
 
