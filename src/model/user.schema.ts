@@ -53,9 +53,9 @@ const userSchema: Schema = new Schema(
     stripe_account_id: {
       type: String,
     },
-    subscriptionId : {
+    subscriptionId: {
       type: String,
-      default : null
+      default: null
     },
     isPrivate: {
       type: Boolean,
@@ -68,9 +68,29 @@ const userSchema: Schema = new Schema(
         receiverId: { type: Schema.Types.ObjectId, ref: 'user' },
       },
     ],
+    notifications: {
+      promotional: {
+        email: { type: Boolean, default: true },
+        sms: { type: Boolean, default: true },
+      },
+      transactional: {
+        email: { type: Boolean, default: true },
+        sms: { type: Boolean, default: true },
+      },
+    },
   },
   { timestamps: true }
 );
+
+userSchema.pre('save', function (next) {
+  if (!this.notifications) {
+    this.notifications = {
+      promotional: { email: true, sms: true },
+      transactional: { email: true, sms: true },
+    };
+  }
+  next();
+});
 
 // Add the toJSON method to the schema
 userSchema.methods.toJSON = function () {

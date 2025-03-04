@@ -228,6 +228,7 @@ export class AuthService {
         account_type: userInfo.account_type,
       });
       const url = `${process.env.FRONTEND_URL}/auth/verified-forget-password?token=${token}`;
+      
       SendEmail.sendRawEmail(
         null,
         null,

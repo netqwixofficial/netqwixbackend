@@ -11,6 +11,7 @@ import onlineUser from "../../model/online_user.schema";
 import * as webpush from "web-push";
 import notification from "../../model/notifications.schema";
 import user from "../../model/user.schema";
+import { NotificationType } from "../../enum/notification.enum";
 const logoPath = path.resolve(__dirname, "../../assets/netqwix_logo.png");
 
 const bucketName = process.env.AWS_BUCKET_NAME;
@@ -232,7 +233,7 @@ export const handleSocketEvents = (socket, connections = {}) => {
 const listenNotificationEvents = (socket) => {
   try {
     socket.on(EVENTS.PUSH_NOTIFICATIONS.ON_SEND, async (payload: any) => {
-      const { title, description, senderId, receiverId, bookingInfo } = payload;
+      const { title, description, senderId, receiverId, bookingInfo, type } = payload;
       const toUserSocketId = MemCache.getDetail(
         process.env.SOCKET_CONFIG,
         receiverId
@@ -245,6 +246,7 @@ const listenNotificationEvents = (socket) => {
         description,
         senderId,
         receiverId,
+        type: type ?? NotificationType.DEFAULT
       });
       // console.log(sender, 'sender')
       // console.log(receiver, 'receiver')

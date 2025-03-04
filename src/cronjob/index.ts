@@ -94,7 +94,8 @@ const sendSessionReminderEmails = (matchedSessions: any[]) => {
       user.account_type.includes(AccountType.Trainee)
     );
     trainees.forEach((traineeUser) => {
-      const { email, fullname } = traineeUser;
+      const { email, fullname,notifications } = traineeUser;
+      if(notifications.promotional.email){
       SendEmail.sendRawEmail(
         null,
         null,
@@ -114,7 +115,7 @@ const sendSessionReminderEmails = (matchedSessions: any[]) => {
       NetQwix Team. <br/>
       <img src=${NetquixImage.logo} style="object-fit: contain; width: 180px;"/>
        </div> `
-      );
+      );}
     });
   });
   return sessionReminders;

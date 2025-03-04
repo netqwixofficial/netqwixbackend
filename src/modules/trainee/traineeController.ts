@@ -119,7 +119,7 @@ export class traineeController {
       }
 
       console.log("result.result.start_time", result.result.start_time);
-      const startTime = CovertTimeAccordingToTimeZone(result.result.start_time,{to:"utc",from:result.result.time_zone});
+      const startTime = CovertTimeAccordingToTimeZone(result.result.start_time, { to: "utc", from: result.result.time_zone });
 
       const runTime = startTime.minus({ minutes: 5 });
       console.log("startTime", startTime);
@@ -138,10 +138,10 @@ export class traineeController {
       }
 
       console.log("datahaiji", result.result);
-      console.log("`${runTime.minute} ${runTime.hour} ${runTime.day} ${runTime.month} *`",`${runTime.minute} ${runTime.hour} ${runTime.day} ${runTime.month} *`)
+      console.log("`${runTime.minute} ${runTime.hour} ${runTime.day} ${runTime.month} *`", `${runTime.minute} ${runTime.hour} ${runTime.day} ${runTime.month} *`)
       const cronTime = `${runTime.minute} ${runTime.hour} ${runTime.day} ${runTime.month} *`;
 
-      const meetingLink = process.env.FRONTEND_URL_SMS+"/meeting?id="
+      const meetingLink = process.env.FRONTEND_URL_SMS + "/meeting?id="
 
       if (
         trainer.extraInfo.availabilityInfo.timeZone === result.result.time_zone
@@ -153,13 +153,14 @@ export class traineeController {
             }
 
             // Send emails to both the trainee and trainer
-            SendEmail.sendRawEmail(
-              null,
-              null,
-              [trainee.email],
-              `REMINDER: Your NetQwix Training Session Starts in ${SessionReminderMinutes.FIVE} minutes at ${result.result.booked_date}`,
-              null,
-              `<div style="font-family: Verdana,Arial,Helvetica,sans-serif;font-size: 18px;line-height: 30px;">
+            if (trainee.notifications.transactional.email) {
+              SendEmail.sendRawEmail(
+                null,
+                null,
+                [trainee.email],
+                `REMINDER: Your NetQwix Training Session Starts in ${SessionReminderMinutes.FIVE} minutes at ${result.result.booked_date}`,
+                null,
+                `<div style="font-family: Verdana,Arial,Helvetica,sans-serif;font-size: 18px;line-height: 30px;">
                 <i  style='color:#ff0000'>${trainee.fullname},</i>
                 <br/><br/>
                 This is your ${SessionReminderMinutes.FIVE} minute reminder that your Training Session will begin in ${SessionReminderMinutes.FIVE} minutes.
@@ -172,7 +173,8 @@ export class traineeController {
                 NetQwix Team. <br/>
                 <img src=${NetquixImage.logo} style="object-fit: contain; width: 180px;"/>
               </div>`
-            );
+              );
+            }
 
             const covertedBookedTime = CovertTimeAccordingToTimeZone(
               result.result.booked_date,
@@ -181,14 +183,15 @@ export class traineeController {
                 from: result.result.time_zone,
               }
             );
+            if (trainer.notifications.transactional.email) {
 
-            SendEmail.sendRawEmail(
-              null,
-              null,
-              [trainer.email],
-              `REMINDER: Your NetQwix Training Session Starts in ${SessionReminderMinutes.FIVE} minutes at ${result.result.booked_date}`,
-              null,
-              `<div style="font-family: Verdana,Arial,Helvetica,sans-serif;font-size: 18px;line-height: 30px;">
+              SendEmail.sendRawEmail(
+                null,
+                null,
+                [trainer.email],
+                `REMINDER: Your NetQwix Training Session Starts in ${SessionReminderMinutes.FIVE} minutes at ${result.result.booked_date}`,
+                null,
+                `<div style="font-family: Verdana,Arial,Helvetica,sans-serif;font-size: 18px;line-height: 30px;">
                 <i  style='color:#ff0000'>${trainer.fullname},</i>
                 <br/><br/>
                 This is your ${SessionReminderMinutes.FIVE} minute reminder that your Training Session will begin in ${SessionReminderMinutes.FIVE} minutes.
@@ -201,22 +204,27 @@ export class traineeController {
                 NetQwix Team. <br/>
                 <img src=${NetquixImage.logo} style="object-fit: contain; width: 180px;"/>
               </div>`
-            );
-
+              );
+            }
             const smsService = new SMSService();
+            if (trainer.notifications.transactional.sms) {
 
-            await smsService.sendSMS(
-              trainer.mobile_no,
-              `REMINDER: Your NetQwix Training Session Starts in ${SessionReminderMinutes.FIVE} minutes` +
+              await smsService.sendSMS(
+                trainer.mobile_no,
+                `REMINDER: Your NetQwix Training Session Starts in ${SessionReminderMinutes.FIVE} minutes` +
                 " With " +
-                trainee.fullname +`. Join with this link ${meetingLink+result.result._id}`
-            );
-            await smsService.sendSMS(
-              trainee.mobile_no,
-              `REMINDER: Your NetQwix Training Session Starts in ${SessionReminderMinutes.FIVE} minutes` +
+                trainee.fullname + `. Join with this link ${meetingLink + result.result._id}`
+              );
+            }
+            if (trainee.notifications.transactional.sms) {
+
+              await smsService.sendSMS(
+                trainee.mobile_no,
+                `REMINDER: Your NetQwix Training Session Starts in ${SessionReminderMinutes.FIVE} minutes` +
                 " With " +
-                trainer.fullname +`. Join with this link ${meetingLink+result.result._id}`
-            );
+                trainer.fullname + `. Join with this link ${meetingLink + result.result._id}`
+              );
+            }
           } catch (err) {
             console.error("Error running cron job:", err);
           }
@@ -226,13 +234,15 @@ export class traineeController {
           console.log("Running Cron", cronTime);
           try {
             // Send emails to both the trainee and trainer
-            SendEmail.sendRawEmail(
-              null,
-              null,
-              [trainee.email],
-              `REMINDER: Your NetQwix Training Session Starts in ${SessionReminderMinutes.FIVE} minutes at ${result.result.booked_date}`,
-              null,
-              `<div style="font-family: Verdana,Arial,Helvetica,sans-serif;font-size: 18px;line-height: 30px;">
+            if (trainee.notifications.transactional.email) {
+
+              SendEmail.sendRawEmail(
+                null,
+                null,
+                [trainee.email],
+                `REMINDER: Your NetQwix Training Session Starts in ${SessionReminderMinutes.FIVE} minutes at ${result.result.booked_date}`,
+                null,
+                `<div style="font-family: Verdana,Arial,Helvetica,sans-serif;font-size: 18px;line-height: 30px;">
                   <i  style='color:#ff0000'>${trainee.fullname},</i>
                   <br/><br/>
                   This is your ${SessionReminderMinutes.FIVE} minute reminder that your Training Session will begin in ${SessionReminderMinutes.FIVE} minutes.
@@ -245,8 +255,8 @@ export class traineeController {
                   NetQwix Team. <br/>
                   <img src=${NetquixImage.logo} style="object-fit: contain; width: 180px;"/>
                 </div>`
-            );
-
+              );
+            }
             const covertedBookedTime = CovertTimeAccordingToTimeZone(
               result.result.booked_date,
               {
@@ -254,14 +264,15 @@ export class traineeController {
                 from: result.result.time_zone,
               }
             );
+            if (trainer.notifications.transactional.email) {
 
-            SendEmail.sendRawEmail(
-              null,
-              null,
-              [trainer.email],
-              `REMINDER: Your NetQwix Training Session Starts in ${SessionReminderMinutes.FIVE} minutes at ${covertedBookedTime}`,
-              null,
-              `<div style="font-family: Verdana,Arial,Helvetica,sans-serif;font-size: 18px;line-height: 30px;">
+              SendEmail.sendRawEmail(
+                null,
+                null,
+                [trainer.email],
+                `REMINDER: Your NetQwix Training Session Starts in ${SessionReminderMinutes.FIVE} minutes at ${covertedBookedTime}`,
+                null,
+                `<div style="font-family: Verdana,Arial,Helvetica,sans-serif;font-size: 18px;line-height: 30px;">
                     <i  style='color:#ff0000'>${trainer.fullname},</i>
                     <br/><br/>
                     This is your ${SessionReminderMinutes.FIVE} minute reminder that your Training Session will begin in ${SessionReminderMinutes.FIVE} minutes.
@@ -274,23 +285,28 @@ export class traineeController {
                     NetQwix Team. <br/>
                     <img src=${NetquixImage.logo} style="object-fit: contain; width: 180px;"/>
                   </div>`
-            );
+              );
+            }
 
             const smsService = new SMSService();
+            if (trainer.notifications.transactional.sms) {
 
-            await smsService.sendSMS(
-              trainer.mobile_no,
-              `REMINDER: Your NetQwix Training Session Starts in ${SessionReminderMinutes.FIVE} minutes` +
+              await smsService.sendSMS(
+                trainer.mobile_no,
+                `REMINDER: Your NetQwix Training Session Starts in ${SessionReminderMinutes.FIVE} minutes` +
                 " With " +
-                trainee.fullname +`. Join with this link ${meetingLink+result.result._id}`
-            );
+                trainee.fullname + `. Join with this link ${meetingLink + result.result._id}`
+              );
+            }
+            if (trainee.notifications.transactional.sms) {
 
-            await smsService.sendSMS(
-              trainee.mobile_no,
-              `REMINDER: Your NetQwix Training Session Starts in ${SessionReminderMinutes.FIVE} minutes` +
+              await smsService.sendSMS(
+                trainee.mobile_no,
+                `REMINDER: Your NetQwix Training Session Starts in ${SessionReminderMinutes.FIVE} minutes` +
                 " With " +
-                trainer.fullname +`. Join with this link ${meetingLink+result.result._id}`
-            );
+                trainer.fullname + `. Join with this link ${meetingLink + result.result._id}`
+              );
+            }
           } catch (err) {
             console.error("Error running cron job:", err);
           }

@@ -224,8 +224,8 @@ export class TraineeService {
           {
             $match: day
               ? {
-                  "available_slots.day": day,
-                }
+                "available_slots.day": day,
+              }
               : {},
           },
           {
@@ -293,11 +293,11 @@ export class TraineeService {
       if (
         !timeRegex.test(
           typeof payload.session_start_time === "string" &&
-            payload.session_start_time
+          payload.session_start_time
         ) ||
         !timeRegex.test(
           typeof payload.session_end_time === "string" &&
-            payload.session_end_time
+          payload.session_end_time
         )
       ) {
         return ResponseBuilder.badRequest(
@@ -322,13 +322,13 @@ export class TraineeService {
       console.log(endTime);
 
       const timeZoneInShort = DateTime.now()
-      .setZone(payload.time_zone)
-      .toFormat("ZZZZ");
+        .setZone(payload.time_zone)
+        .toFormat("ZZZZ");
       const bookedTime = `${startTime} To ${endTime}`;
       const subjectTrainee = `NetQwix Training Session Booked for ${bookedDate} at ${bookedTime} ${timeZoneInShort}`;
       const timeZoneInShortForTrainer = DateTime.now()
-      .setZone(trainerDetails.extraInfo.availabilityInfo.timeZone)
-      .toFormat("ZZZZ");
+        .setZone(trainerDetails.extraInfo.availabilityInfo.timeZone)
+        .toFormat("ZZZZ");
       const subjectTrainer = `NetQwix Training Session Booked for ${bookedDate} at ${bookedTime} ${timeZoneInShort}`;
       const traineeMessageTemplate = `<div style="font-family: Verdana, Arial, Helvetica, sans-serif; font-size: 18px; line-height: 30px;">
         Dear <i style='color:#ff0000'>${traineeDetails.fullname},</i>
@@ -340,7 +340,7 @@ export class TraineeService {
         <br/>
         <img src=${NetquixImage.logo} style="object-fit: contain; width: 180px;"/>
       </div>`;
-  
+
       const trainerMessageTemplate = `<div style="font-family: Verdana, Arial, Helvetica, sans-serif; font-size: 18px; line-height: 30px;">
         Dear <i style='color:#ff0000'>${trainerDetails.fullname},</i>
         <br/><br/>
@@ -366,44 +366,56 @@ export class TraineeService {
           <br/>
         	<img src=${NetquixImage.logo} style="object-fit: contain; width: 180px;"/>
         	</div>`;
-      SendEmail.sendRawEmail(
-        null,
-        null,
-        traineeDetails.email,
-        subjectTrainee,
-        null,
-        traineeMessageTemplate
-      );
-      SendEmail.sendRawEmail(
-        null,
-        null,
-        trainerDetails.email,
-        subjectTrainer,
-        null,
-        trainerMessageTemplate
-      );
+      if (traineeDetails.notifications.transactional.email) {
 
-      
-      const smsService = new SMSService();
-
-      await smsService.sendSMS(
-        trainerDetails.mobile_no,
-        subjectTrainee + " With " + traineeDetails.fullname
-      );
-      await smsService.sendSMS(
-        traineeDetails.mobile_no,
-        subjectTrainer + " With " + trainerDetails.fullname
-      );
-
-      if (payload.status === BOOKED_SESSIONS_STATUS["BOOKED"]) {
         SendEmail.sendRawEmail(
           null,
           null,
-          [traineeDetails.email],
-          paymentConfirmationSubject,
+          traineeDetails.email,
+          subjectTrainee,
           null,
-          paymentConfirmationMessage
+          traineeMessageTemplate
         );
+      }
+      if (trainerDetails.notifications.transactional.email) {
+
+        SendEmail.sendRawEmail(
+          null,
+          null,
+          trainerDetails.email,
+          subjectTrainer,
+          null,
+          trainerMessageTemplate
+        );
+      }
+
+      const smsService = new SMSService();
+      if (trainerDetails.notifications.transactional.sms) {
+
+        await smsService.sendSMS(
+          trainerDetails.mobile_no,
+          subjectTrainee + " With " + traineeDetails.fullname
+        )
+      }
+      if (traineeDetails.notifications.transactional.sms) {
+
+        await smsService.sendSMS(
+          traineeDetails.mobile_no,
+          subjectTrainer + " With " + trainerDetails.fullname
+        );
+      }
+      if (payload.status === BOOKED_SESSIONS_STATUS["BOOKED"]) {
+        if (traineeDetails.notifications.transactional.email) {
+
+          SendEmail.sendRawEmail(
+            null,
+            null,
+            [traineeDetails.email],
+            paymentConfirmationSubject,
+            null,
+            paymentConfirmationMessage
+          );
+        }
       }
       var bookingData = await sessionObj.save();
       await user.updateOne(
@@ -458,16 +470,19 @@ export class TraineeService {
       const trainerDetails = await user
         .findById(trainer_id)
         .select({ _id: 0, fullname: 1, email: 1 });
+      if (trainerDetails.notifications.transactional.email) {
 
-      SendEmail.sendRawEmail(
-        "meeting",
-        {
-          "{NAME}": `${trainerDetails.fullname}`,
-          "{MEETING_URL}": "https://google.com",
-        },
-        [trainerDetails.email],
-        "Instant Meeting"
-      );
+
+        SendEmail.sendRawEmail(
+          "meeting",
+          {
+            "{NAME}": `${trainerDetails.fullname}`,
+            "{MEETING_URL}": "https://google.com",
+          },
+          [trainerDetails.email],
+          "Instant Meeting"
+        );
+      }
       return ResponseBuilder.data({}, l10n.t("INSTANT_MEETING_BOOKED"));
     } catch (err) {
       return ResponseBuilder.error(err, l10n.t("ERR_INTERNAL_SERVER"));
@@ -476,8 +491,8 @@ export class TraineeService {
 
   public async updateProfile(reqBody, authUser): Promise<ResponseBuilder> {
     try {
-      console.log("reqBody",reqBody)
-      console.log("authUser",authUser)
+      console.log("reqBody", reqBody)
+      console.log("authUser", authUser)
 
       await user.findOneAndUpdate(
         { _id: authUser["_id"].toString() },
@@ -571,7 +586,7 @@ export class TraineeService {
             $project: {
               start_time: 1,
               end_time: 1,
-              time_zone:1
+              time_zone: 1
             },
           },
         ])
@@ -581,24 +596,24 @@ export class TraineeService {
 
       // Convert existing bookings' times to trainee's time zone only if necessary
       const normalizedBookings = existingBookings.map(booking => {
-        
+
         let startTraineeTime = booking.start_time
         let endTraineeTime = booking.end_time
-        if(traineeTimeZone!== booking.time_zone){
-          console.log("bookingStrt",booking.start_time, booking.time_zone)
+        if (traineeTimeZone !== booking.time_zone) {
+          console.log("bookingStrt", booking.start_time, booking.time_zone)
           startTraineeTime = new Date(CovertTimeAccordingToTimeZone(booking.start_time, {
-          to: traineeTimeZone,
-          from: booking.time_zone,
-        }).ts);
+            to: traineeTimeZone,
+            from: booking.time_zone,
+          }).ts);
           endTraineeTime = new Date(CovertTimeAccordingToTimeZone(booking.end_time, {
-          to: traineeTimeZone,
-          from: booking.time_zone,
-        }).ts);
+            to: traineeTimeZone,
+            from: booking.time_zone,
+          }).ts);
         }
         return { start: startTraineeTime, end: endTraineeTime };
       });
 
-      console.log("normalizedBookings",normalizedBookings)
+      console.log("normalizedBookings", normalizedBookings)
 
       // Remove overlapping available slots
       const availableSlots = timeSlots.filter(slot => {

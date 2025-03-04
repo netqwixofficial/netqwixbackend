@@ -1,5 +1,6 @@
 import { Schema, model as Model } from "mongoose";
 import { Tables } from "../config/tables";
+import { NotificationType } from "../enum/notification.enum";
 
 const notificationSchema: Schema = new Schema(
   {
@@ -27,6 +28,11 @@ const notificationSchema: Schema = new Schema(
       type: Boolean,
       default: true,
     },
+    type: {
+      type: String,
+      enum: NotificationType,
+      default: NotificationType.DEFAULT
+    }
   },
   { timestamps: true }
 );

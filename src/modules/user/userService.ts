@@ -43,8 +43,8 @@ export class UserService {
       emailTemplate,
       null,
       [createUser.email],
-      "Welcome to Our Platform!", 
-      "Thank you for joining!" 
+      "Welcome to Our Platform!",
+      "Thank you for joining!"
     );
 
     await userObj.save();
@@ -86,13 +86,14 @@ export class UserService {
           );
           const traineeName = traineeInfo.fullname;
           const trainerName = trainerInfo.fullname;
-          SendEmail.sendRawEmail(
-            null,
-            null,
-            [traineeInfo.email],
-            `NetQwix Training Session has been ${payload.booked_status}`,
-            null,
-            `<div style="font-family: Verdana,Arial,Helvetica,sans-serif;font-size: 18px;line-height: 30px;">
+          if (traineeInfo.notifications.transactional.email) {
+            SendEmail.sendRawEmail(
+              null,
+              null,
+              [traineeInfo.email],
+              `NetQwix Training Session has been ${payload.booked_status}`,
+              null,
+              `<div style="font-family: Verdana,Arial,Helvetica,sans-serif;font-size: 18px;line-height: 30px;">
           Hello <i  style='color:#ff0000'>${traineeName},</i>
           <br/><br/>
            Your NetQwix Training Session has been ${payload.booked_status} by your trainer <b><i style='color:#ff0000'>${trainerName}</i></b>
@@ -105,15 +106,19 @@ export class UserService {
           <br/>
           <img src=${NetquixImage.logo} style="object-fit: contain; width: 180px;"/>
            </div> `
-          );
-          const meetingLink = process.env.FRONTEND_URL_SMS+"/meeting?id="
-          console.log("meeting link",meetingLink+bookedSessionDetail._id)
-          await smsService.sendSMS(traineeInfo.mobile_no," NetQwix Training Session has been confirmed you may start the lesson using this link "+meetingLink+bookedSessionDetail._id);
-          await smsService.sendSMS(trainerInfo.mobile_no," NetQwix Training Session has been confirmed you may start the lesson using this link "+meetingLink+bookedSessionDetail._id);
-
+            );
+          }
+          const meetingLink = process.env.FRONTEND_URL_SMS + "/meeting?id="
+          console.log("meeting link", meetingLink + bookedSessionDetail._id)
+          if (traineeInfo.notifications.transactional.sms) {
+            await smsService.sendSMS(traineeInfo.mobile_no, " NetQwix Training Session has been confirmed you may start the lesson using this link " + meetingLink + bookedSessionDetail._id);
+          }
+          if (trainerInfo.notifications.transactional.sms) {
+            await smsService.sendSMS(trainerInfo.mobile_no, " NetQwix Training Session has been confirmed you may start the lesson using this link " + meetingLink + bookedSessionDetail._id);
+          }
         }
-      
-    
+
+
 
         if (
           account_type === AccountType.TRAINER &&
@@ -141,8 +146,12 @@ export class UserService {
           await booked_session.findByIdAndUpdate(bookedSessionId, {
             refund_status: "refunded",
           });
-          await smsService.sendSMS(traineeInfo.mobile_no,"session was cancelled. payment will be refunded back to source.");
-          await smsService.sendSMS(trainerInfo.mobile_no,"session cancelled."+ bookedDate+ " " + result.session_start_time+" " + result.session_end_time);
+          if (traineeInfo.notifications.transactional.sms) {
+            await smsService.sendSMS(traineeInfo.mobile_no, "session was cancelled. payment will be refunded back to source.");
+          }
+          if (trainerInfo.notifications.transactional.sms) {
+            await smsService.sendSMS(trainerInfo.mobile_no, "session cancelled." + bookedDate + " " + result.session_start_time + " " + result.session_end_time);
+          }
 
         }
         return ResponseBuilder.data(
@@ -238,22 +247,23 @@ export class UserService {
       if (!userInfo) {
         return ResponseBuilder.data({ userInfo }, "User not found");
       } else {
-        console.log("userInfo",userInfo._doc)
+        console.log("userInfo", userInfo._doc)
         const emailTemplate =
-        userInfo._doc.account_type === AccountType.TRAINER
-          ? "refer-expert"
-          : "refer-trainee";
-        
-        SendEmail.sendRawEmail(
-          emailTemplate,
-          {
-            "{FULLNAME}": `${userInfo._doc.fullname}`,
-            "{FULLNAME2}": `${userInfo._doc.fullname}`,
-          },
-          [userInfo?.user_email],
-          `Exclusive Invitation to Join NetQwix Platform!`,
-          null,
-        );
+          userInfo._doc.account_type === AccountType.TRAINER
+            ? "refer-expert"
+            : "refer-trainee";
+        if (userInfo.notifications.promotional.email) {
+          SendEmail.sendRawEmail(
+            emailTemplate,
+            {
+              "{FULLNAME}": `${userInfo._doc.fullname}`,
+              "{FULLNAME2}": `${userInfo._doc.fullname}`,
+            },
+            [userInfo?.user_email],
+            `Exclusive Invitation to Join NetQwix Platform!`,
+            null,
+          );
+        }
 
         return ResponseBuilder.data({}, "");
       }
@@ -282,15 +292,15 @@ export class UserService {
     }
   }
 
-  public async updateMobileNumber(userInfo:any, numbers: {old:string,new:string}) {
+  public async updateMobileNumber(userInfo: any, numbers: { old: string, new: string }) {
     try {
-      console.log("userInfo",userInfo.mobile_no,numbers.old)
+      console.log("userInfo", userInfo.mobile_no, numbers.old)
       if (userInfo.mobile_no !== numbers.old) {
         return ResponseBuilder.badRequest("old password is incorrect.");
       }
 
       const updatedUserInfo = await user.findByIdAndUpdate(userInfo._id, {
-        mobile_no:numbers.new,
+        mobile_no: numbers.new,
       }, { new: true });
 
       if (!updatedUserInfo) {
@@ -303,9 +313,27 @@ export class UserService {
     }
   }
 
+  public async updateNotificationSettings(userInfo: any, notifications) {
+    try {
+
+
+      const updatedUserInfo = await user.findByIdAndUpdate(userInfo._id, {
+        notifications: notifications,
+      }, { new: true });
+
+      if (!updatedUserInfo) {
+        return ResponseBuilder.data([], "User not found");
+      }
+
+      return ResponseBuilder.data(updatedUserInfo, "User Notification setting updated successfully");
+    } catch (err) {
+      return ResponseBuilder.error(err, l10n.t("ERR_INTERNAL_SERVER"));
+    }
+  }
+
   public async getScheduledMeetings(req) {
     const { authUser, query } = req;
-    const { status,datetime,timezone } = query;
+    const { status, datetime, timezone } = query;
     try {
       let matchCondition = {};
 
@@ -318,90 +346,92 @@ export class UserService {
           trainee_id: new Types.ObjectId(authUser._id),
         };
       }
-      
+
       const result = await booked_session
-      .aggregate([
-        {
-          $match: { ...matchCondition,
-            time_zone: { $exists: true, $ne: null },
-            start_time: { $exists: true, $ne: null },
-            end_time: { $exists: true, $ne: null },
-            session_end_time: { $exists: true, $ne: null },
-            session_start_time: { $exists: true, $ne: null },
-            booked_date: { $exists: true, $ne: null } },
-        },
-        {
-          $lookup: {
-            from: "users",
-            localField: "trainer_id",
-            foreignField: "_id",
-            as: "trainer_info",
-            pipeline: [
-              {
-                $project: Constant.pipelineUser,
-              },
-            ],
+        .aggregate([
+          {
+            $match: {
+              ...matchCondition,
+              time_zone: { $exists: true, $ne: null },
+              start_time: { $exists: true, $ne: null },
+              end_time: { $exists: true, $ne: null },
+              session_end_time: { $exists: true, $ne: null },
+              session_start_time: { $exists: true, $ne: null },
+              booked_date: { $exists: true, $ne: null }
+            },
           },
-        },
-        {
-          $lookup: {
-            from: "users",
-            localField: "trainee_id",
-            foreignField: "_id",
-            as: "trainee_info",
-            pipeline: [
-              {
-                $project: Constant.pipelineUser,
-              },
-            ],
+          {
+            $lookup: {
+              from: "users",
+              localField: "trainer_id",
+              foreignField: "_id",
+              as: "trainer_info",
+              pipeline: [
+                {
+                  $project: Constant.pipelineUser,
+                },
+              ],
+            },
           },
-        },
-        {
-          $lookup: {
-            from: "clips",
-            localField: "trainee_clip",
-            foreignField: "_id",
-            as: "trainee_clips",
+          {
+            $lookup: {
+              from: "users",
+              localField: "trainee_id",
+              foreignField: "_id",
+              as: "trainee_info",
+              pipeline: [
+                {
+                  $project: Constant.pipelineUser,
+                },
+              ],
+            },
           },
-        },
-        {
-          $unwind: {
-            path: "$trainer_info",
+          {
+            $lookup: {
+              from: "clips",
+              localField: "trainee_clip",
+              foreignField: "_id",
+              as: "trainee_clips",
+            },
           },
-        },
-        {
-          $unwind: {
-            path: "$trainee_info",
+          {
+            $unwind: {
+              path: "$trainer_info",
+            },
           },
-        },
-        {
-          $project: {
-            _id: 1,
-            status: 1,
-            booked_date: 1,
-            session_start_time: 1,
-            session_end_time: 1,
-            session_link: 1,
-            createdAt: 1,
-            updatedAt: 1,
-            ratings: { $ifNull: ["$ratings", null] },
-            trainer_info: 1,
-            trainee_info: 1,
-            trainee_clips: 1,
-            time_zone: 1,
-            start_time: 1,
-            end_time: 1,
-            report: 1,
-            iceServers: 1
+          {
+            $unwind: {
+              path: "$trainee_info",
+            },
           },
-        },
-        {
-          $sort: {
-            createdAt: -1,
+          {
+            $project: {
+              _id: 1,
+              status: 1,
+              booked_date: 1,
+              session_start_time: 1,
+              session_end_time: 1,
+              session_link: 1,
+              createdAt: 1,
+              updatedAt: 1,
+              ratings: { $ifNull: ["$ratings", null] },
+              trainer_info: 1,
+              trainee_info: 1,
+              trainee_clips: 1,
+              time_zone: 1,
+              start_time: 1,
+              end_time: 1,
+              report: 1,
+              iceServers: 1
+            },
           },
-        },
-      ])
-      .exec();
+          {
+            $sort: {
+              createdAt: -1,
+            },
+          },
+        ])
+        .exec();
 
 
       return ResponseBuilder.data({ data: result }, l10n.t("MEETING_FETCHED"));
@@ -491,26 +521,26 @@ export class UserService {
   public async getAllUsers(userInfo: any, searchTerm: string) {
     try {
       const { _id } = userInfo;
-  
+
       // Define the search filter
       const searchFilter = searchTerm
         ? {
-            $and: [
-              {
-                $or: [
-                  { fullname: { $regex: searchTerm, $options: "i" } },
-                  { email: { $regex: searchTerm, $options: "i" } },
-                ],
-              },
-              { isPrivate: { $ne: true } },
-              { _id: { $ne: _id } }, // Exclude the logged-in user
-            ],
-          }
+          $and: [
+            {
+              $or: [
+                { fullname: { $regex: searchTerm, $options: "i" } },
+                { email: { $regex: searchTerm, $options: "i" } },
+              ],
+            },
+            { isPrivate: { $ne: true } },
+            { _id: { $ne: _id } }, // Exclude the logged-in user
+          ],
+        }
         : { isPrivate: { $ne: true }, _id: { $ne: _id } }; // Exclude the logged-in user
-  
+
       // Query the database with the filter
       const trainers = await user.find(searchFilter);
-  
+
       if (!trainers || trainers.length === 0) {
         return ResponseBuilder.data(trainers, "Users not found");
       }
