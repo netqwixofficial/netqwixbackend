@@ -248,16 +248,16 @@ export class UserService {
         return ResponseBuilder.data({ userInfo }, "User not found");
       } else {
         console.log("userInfo", userInfo._doc)
-        const emailTemplate =
-          userInfo._doc.account_type === AccountType.TRAINER
-            ? "refer-expert"
-            : "refer-trainee";
-        if (userInfo.notifications.promotional.email) {
+        // const emailTemplate =
+        //   userInfo._doc.account_type === AccountType.TRAINER
+        //     ? "refer-expert"
+        //     : "refer-trainee";
+        if (userInfo._doc.notifications.promotional.email) {
           SendEmail.sendRawEmail(
-            emailTemplate,
+            "refer-friend",
             {
               "{FULLNAME}": `${userInfo._doc.fullname}`,
-              "{FULLNAME2}": `${userInfo._doc.fullname}`,
+              "{PROFILE_PIC}": `https://data.netqwix.com/${userInfo._doc.profile_picture}`,
             },
             [userInfo?.user_email],
             `Exclusive Invitation to Join NetQwix Platform!`,
@@ -268,6 +268,7 @@ export class UserService {
         return ResponseBuilder.data({}, "");
       }
     } catch (err) {
+      console.log("error",err)
       return ResponseBuilder.error(err, l10n.t("ERR_INTERNAL_SERVER"));
     }
   }
