@@ -35,7 +35,9 @@ export class Utils {
     if (durationHours === 0) {
       return `${durationMinutes} minutes`;
     }
-    
+    if(durationHours === 1){
+    return `${durationHours} hour`;
+    }
     return `${durationHours} hours`;
   };
 
