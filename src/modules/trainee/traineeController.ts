@@ -18,6 +18,7 @@ import user from "../../model/user.schema";
 import * as cron from "node-cron";
 import SMSService from "../../services/sms-service";
 import { CovertTimeAccordingToTimeZone } from "../../Utils/Utils";
+import { timeZoneAbbreviations } from "../../Utils/constant";
 
 export class traineeController {
   public logger = log.getLogger();
@@ -152,8 +153,9 @@ export class traineeController {
               return console.error("User not found.");
             }
 
-            const startTime = DateTime.fromISO(result.result.start_time, { zone: 'utc' }).setZone(result.result.time_zone);
-            const formattedTime = startTime.toFormat("cccc, LLL dd'th' h:mm a ZZZZ");
+            const startTime = DateTime.fromJSDate(result.result.start_time, { zone: 'utc' })
+            const formattedTime = `${startTime.toFormat("EEEE, MMMM d'th' h:mm a")} ${timeZoneAbbreviations[result.result.time_zone] || result.result.time_zone}`
+            // const formattedTime = startTime.toFormat("cccc, LLL dd'th' h:mm a ZZZZ");
 
             // Send emails to both the trainee and trainer
             if (trainee.notifications.transactional.email) {
@@ -222,8 +224,9 @@ export class traineeController {
            
             // Send emails to both the trainee and trainer
             if (trainee.notifications.transactional.email) {
-              const traineeTime= DateTime.fromISO(sessionStartTime, { zone: 'utc' }).setZone(result.result.time_zone);
-              const traineeFormattedTime = traineeTime.toFormat("cccc, LLL dd'th' h:mm a ZZZZ");
+              const startTime = DateTime.fromJSDate(sessionStartTime, { zone: 'utc' })
+              const traineeFormattedTime = `${startTime.toFormat("EEEE, MMMM d'th' h:mm a")} ${timeZoneAbbreviations[result.result.time_zone] || result.result.time_zone}`
+   
               SendEmail.sendRawEmail(
                 "5-min-remainder",
                 {
@@ -243,8 +246,8 @@ export class traineeController {
               }
             );
             if (trainer.notifications.transactional.email) {
-              const trainerTime= DateTime.fromISO(sessionStartTime, { zone: 'utc' }).setZone(trainer.extraInfo.availabilityInfo.timeZone);
-              const trainerFormattedTime = trainerTime.toFormat("cccc, LLL dd'th' h:mm a ZZZZ");
+              const startTime = DateTime.fromJSDate(sessionStartTime, { zone: 'utc' })
+              const trainerFormattedTime = `${startTime.toFormat("EEEE, MMMM d'th' h:mm a")} ${timeZoneAbbreviations[trainer.extraInfo.availabilityInfo.timeZone] || trainer.extraInfo.availabilityInfo.timeZone}`
 
               SendEmail.sendRawEmail(
                 "5-min-remainder",
