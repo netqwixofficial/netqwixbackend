@@ -90,10 +90,10 @@ export class UserService {
           if (traineeInfo.notifications.transactional.email) {
             const meetingLink = process.env.FRONTEND_URL_SMS + "/meeting?id=" + result._id;
             const startTime = DateTime.fromJSDate(result.start_time, { zone: 'utc' })
-            console.log("startTime",startTime)
-            console.log("startTime2",result.start_time)
+            console.log("startTime", startTime)
+            console.log("startTime2", result.start_time)
             const trainerFormattedTime = `${startTime.toFormat("EEEE, MMMM d'th' h:mm a")} ${timeZoneAbbreviations[result.time_zone] || result.time_zone}`
-            
+
             if (payload.booked_status === "confirmed") {
               SendEmail.sendRawEmail(
                 "session-confirmation",
@@ -276,16 +276,38 @@ export class UserService {
         //     ? "refer-expert"
         //     : "refer-trainee";
         if (userInfo._doc.notifications.promotional.email) {
-          SendEmail.sendRawEmail(
-            "refer-friend",
-            {
-              "{FULLNAME}": `${userInfo._doc.fullname}`,
-              "{PROFILE_PIC}": `https://data.netqwix.com/${userInfo._doc.profile_picture}`,
-            },
-            [userInfo?.user_email],
-            `Exclusive Invitation to Join NetQwix Platform!`,
-            null,
-          );
+          if (userInfo._doc.account_type === AccountType.TRAINER) {
+            SendEmail.sendRawEmail(
+              "refer-expert",
+              {
+                "{FULLNAME}": `${userInfo._doc.fullname}`,
+                "{FULLNAME1}": `${userInfo._doc.fullname}`,
+                "{FULLNAME2}": `${userInfo._doc.fullname}`,
+                "{FULLNAME3}": `${userInfo._doc.fullname}`,
+                "{FIRSTNAME}": `${userInfo._doc.fullname.split(" ")[0]}`,
+                "{FIRSTNAME1}": `${userInfo._doc.fullname.split(" ")[0]}`,
+                "{FIRSTNAME2}": `${userInfo._doc.fullname.split(" ")[0]}`,
+                "{FIRSTNAME3}": `${userInfo._doc.fullname.split(" ")[0]}`,
+                "{FIRSTNAME4}": `${userInfo._doc.fullname.split(" ")[0]}`,
+                "{PROFILE_PIC}": `https://data.netqwix.com/${userInfo._doc.profile_picture}`,
+              },
+              [userInfo?.user_email],
+              `Exclusive Invitation to Join NetQwix Platform!`,
+              null,
+            );
+
+          } else {
+            SendEmail.sendRawEmail(
+              "refer-friend",
+              {
+                "{FULLNAME}": `${userInfo._doc.fullname}`,
+                "{PROFILE_PIC}": `https://data.netqwix.com/${userInfo._doc.profile_picture}`,
+              },
+              [userInfo?.user_email],
+              `Exclusive Invitation to Join NetQwix Platform!`,
+              null,
+            );
+          }
         }
 
         return ResponseBuilder.data({}, "");
