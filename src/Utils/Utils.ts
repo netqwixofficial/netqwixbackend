@@ -32,6 +32,9 @@ export class Utils {
     const duration = moment.duration(end.diff(start));
     const durationHours = duration.hours();
     const durationMinutes = duration.minutes();
+    if (durationHours === 0) {
+      return `${durationMinutes} minutes`;
+    }
     return `${durationHours} hours and ${durationMinutes} minutes`;
   };
 
