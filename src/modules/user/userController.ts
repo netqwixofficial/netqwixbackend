@@ -390,21 +390,15 @@ export class userController {
 
       // Send emails to both the trainee and trainer
       SendEmail.sendRawEmail(
-        null,
-        null,
+        "friend-request",
+        {
+          "[USER FULL NAME]":sender.fullname,
+          "[TRAINER/TRAINEE NAME]":sender.fullname,
+          "[USER_PROFILE_PIC]":`https://data.netqwix.com/${sender.profile_picture}`
+
+        },
         [receiver.email],
-        `Received Friend Request`,
-        null,
-        `<div style="font-family: Verdana,Arial,Helvetica,sans-serif;font-size: 18px;line-height: 30px;">
-                      <i  style='color:#ff0000'>${receiver.fullname},</i>
-                      <br/><br/>
-                     You have received a friend request from ${sender.fullname}.<br/><br/>
-                      <br/><br/>
-                     
-                      From,  <br/>
-                      NetQwix Team. <br/>
-                      <img src=${NetquixImage.logo} style="object-fit: contain; width: 180px;"/>
-                    </div>`
+        `NetQwix Friend Request from ${sender.fullname}`,
       );
 
       res.status(200).json({ message: "Friend request sent successfully." });

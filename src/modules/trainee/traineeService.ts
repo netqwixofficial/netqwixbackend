@@ -24,6 +24,7 @@ import * as mongoose from "mongoose";
 import { Failure } from "../../helpers/error";
 import { DateTime } from "luxon";
 import SMSService from "../../services/sms-service";
+import { timeZoneAbbreviations } from "../../Utils/constant";
 
 export class TraineeService {
   public log = log.getLogger();
@@ -325,67 +326,41 @@ export class TraineeService {
         .setZone(payload.time_zone)
         .toFormat("ZZZZ");
       const bookedTime = `${startTime} To ${endTime}`;
-      const subjectTrainee = `NetQwix Training Session Booked for ${bookedDate} at ${bookedTime} ${timeZoneInShort}`;
+      const subjectTrainee = `NetQwix Training Session Booked for ${bookedDate} at ${bookedTime} ${timeZoneAbbreviations[sessionObj.time_zone] || sessionObj.time_zone}`;
       const timeZoneInShortForTrainer = DateTime.now()
         .setZone(trainerDetails.extraInfo.availabilityInfo.timeZone)
         .toFormat("ZZZZ");
-      const subjectTrainer = `NetQwix Training Session Booked for ${bookedDate} at ${bookedTime} ${timeZoneInShort}`;
-      const traineeMessageTemplate = `<div style="font-family: Verdana, Arial, Helvetica, sans-serif; font-size: 18px; line-height: 30px;">
-        Dear <i style='color:#ff0000'>${traineeDetails.fullname},</i>
-        <br/><br/>
-        Thank You for booking your NetQwix Training Session with <i style='color:#ff0000'>${trainerDetails.fullname}</i>.
-        Your session has been booked for <i style='color:#ff0000'>${bookedDate}</i> at <i style='color:#ff0000'>${bookedTime} ${timeZoneInShort}</i>.
-        <br/><br/>
-        Team NetQwix.
-        <br/>
-        <img src=${NetquixImage.logo} style="object-fit: contain; width: 180px;"/>
-      </div>`;
-
-      const trainerMessageTemplate = `<div style="font-family: Verdana, Arial, Helvetica, sans-serif; font-size: 18px; line-height: 30px;">
-        Dear <i style='color:#ff0000'>${trainerDetails.fullname},</i>
-        <br/><br/>
-        Thank You for booking your NetQwix Training Session with <i style='color:#ff0000'>${traineeDetails.fullname}</i>.
-        Your session has been booked for <i style='color:#ff0000'>${bookedDate}</i> at <i style='color:#ff0000'>${bookedTime} ${timeZoneInShortForTrainer}</i>.
-        <br/><br/>
-        Team NetQwix.
-        <br/>
-        <img src=${NetquixImage.logo} style="object-fit: contain; width: 180px;"/>
-      </div>`;
+      const subjectTrainer = `NetQwix Training Session Booked for ${bookedDate} at ${bookedTime} ${timeZoneAbbreviations[trainerDetails.extraInfo.availabilityInfo.timeZone] ||trainerDetails.extraInfo.availabilityInfo.timeZone}`;
+      
       const charging_price = `${amountType.USD}${+payload.charging_price}.`;
-      const paymentConfirmationSubject = "NetQwix payment confirmed";
-      const paymentConfirmationMessage = `<div style="font-family: Verdana,Arial,Helvetica,sans-serif;font-size: 18px;line-height: 30px;">
-        	Hello <i  style='color:#ff0000'>${traineeDetails.fullname},</i>
-          <br/><br/>
-        	 Payment received successfully <b><i style='color:#ff0000'>${charging_price}</i></b>
-          <br/><br/>
-           Please wait for ${trainerDetails.fullname} to confirm the booking. We'll notify you as soon as its done.
-           <br/><br/>
-        	Thank You
-          <br/>
-        	Team NetQwix.
-          <br/>
-        	<img src=${NetquixImage.logo} style="object-fit: contain; width: 180px;"/>
-        	</div>`;
+      const meetingLink = process.env.FRONTEND_URL_SMS + "/meeting?id="+ sessionObj["_id"];
+
       if (traineeDetails.notifications.transactional.email) {
 
         SendEmail.sendRawEmail(
-          null,
-          null,
+          "session-booking-trainee",
+          {
+            "[TRAINEE FIRST NAME]":traineeDetails.fullname.split(" ")[0],
+            "[TRAINER NAME]":trainerDetails.fullname,
+            "[session date and time]":`${bookedDate} at ${bookedTime} ${timeZoneAbbreviations[sessionObj.time_zone] || sessionObj.time_zone}`,
+            "[MEETING_LINK]":meetingLink
+          },
           traineeDetails.email,
-          subjectTrainee,
-          null,
-          traineeMessageTemplate
+          "NetQwix Training Session is Booked",
         );
       }
       if (trainerDetails.notifications.transactional.email) {
 
         SendEmail.sendRawEmail(
-          null,
-          null,
+          "session-booking-trainer",
+          {
+            "[TRAINER FIRST NAME]":trainerDetails.fullname.split(" ")[0],
+            "[TRAINEE_NAME]":traineeDetails.fullname,
+            "[session date and time]":`${bookedDate} at ${bookedTime} ${timeZoneAbbreviations[trainerDetails.extraInfo.availabilityInfo.timeZone] ||trainerDetails.extraInfo.availabilityInfo.timeZone}`,
+            "[MEETING_LINK]":meetingLink
+          },
           trainerDetails.email,
-          subjectTrainer,
-          null,
-          trainerMessageTemplate
+          "NetQwix Training Session is Booked",
         );
       }
 
@@ -408,12 +383,15 @@ export class TraineeService {
         if (traineeDetails.notifications.transactional.email) {
 
           SendEmail.sendRawEmail(
-            null,
-            null,
+            "payment-confirmation",
+            {
+              "[First Name]":traineeDetails.fullname.split(" ")[0],
+              "[AMOUNT]":charging_price,
+              "[TRAINER NAME]":trainerDetails.fullname,
+              "[TRAINER NAME2]":trainerDetails.fullname
+            },
             [traineeDetails.email],
-            paymentConfirmationSubject,
-            null,
-            paymentConfirmationMessage
+            "NetQwix Payment Confirmation",
           );
         }
       }

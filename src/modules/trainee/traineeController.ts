@@ -122,7 +122,7 @@ export class traineeController {
       const startTime = CovertTimeAccordingToTimeZone(result.result.start_time, { to: "utc", from: result.result.time_zone });
 
       const runTime = startTime.minus({ minutes: 5 });
-      console.log("startTime", startTime);
+      console.log("startTime", startTime, startTime.toJSDate());
       console.log("runTime", runTime, runTime.toJSDate());
 
       if (!trainee.isPrivate && !trainer.isPrivate) {
@@ -152,27 +152,22 @@ export class traineeController {
               return console.error("User not found.");
             }
 
+            const startTime = DateTime.fromISO(result.result.start_time, { zone: 'utc' }).setZone(result.result.time_zone);
+            const formattedTime = startTime.toFormat("cccc, LLL dd'th' h:mm a ZZZZ");
+
             // Send emails to both the trainee and trainer
             if (trainee.notifications.transactional.email) {
+             
+
               SendEmail.sendRawEmail(
-                null,
-                null,
+                "5-min-remainder",
+                {
+                  "{TRAINER/TRAINEE NAME}": trainer.fullname,
+                  "{MEETING_LINK}": meetingLink + result.result._id,
+                  "{SESSION_TIME}": formattedTime
+                },
                 [trainee.email],
-                `REMINDER: Your NetQwix Training Session Starts in ${SessionReminderMinutes.FIVE} minutes at ${result.result.booked_date}`,
-                null,
-                `<div style="font-family: Verdana,Arial,Helvetica,sans-serif;font-size: 18px;line-height: 30px;">
-                <i  style='color:#ff0000'>${trainee.fullname},</i>
-                <br/><br/>
-                This is your ${SessionReminderMinutes.FIVE} minute reminder that your Training Session will begin in ${SessionReminderMinutes.FIVE} minutes.
-                ${result.result.booked_date}
-                <br/><br/>
-                Team NetQwix recommends logging in 2-5 minutes prior to your scheduled session.<br/><br/>
-                Thank You For Booking the Slot in NetQwix.
-                <br/><br/>
-                From,  <br/>
-                NetQwix Team. <br/>
-                <img src=${NetquixImage.logo} style="object-fit: contain; width: 180px;"/>
-              </div>`
+                `Reminder: Your session with ${trainer.fullname} starts in 5 minutes!!`,
               );
             }
 
@@ -183,27 +178,17 @@ export class traineeController {
                 from: result.result.time_zone,
               }
             );
+            
             if (trainer.notifications.transactional.email) {
-
               SendEmail.sendRawEmail(
-                null,
-                null,
+                "5-min-remainder",
+                {
+                  "{TRAINER/TRAINEE NAME}": trainee.fullname,
+                  "{MEETING_LINK}": meetingLink + result.result._id,
+                  "{SESSION_TIME}": formattedTime
+                },
                 [trainer.email],
-                `REMINDER: Your NetQwix Training Session Starts in ${SessionReminderMinutes.FIVE} minutes at ${result.result.booked_date}`,
-                null,
-                `<div style="font-family: Verdana,Arial,Helvetica,sans-serif;font-size: 18px;line-height: 30px;">
-                <i  style='color:#ff0000'>${trainer.fullname},</i>
-                <br/><br/>
-                This is your ${SessionReminderMinutes.FIVE} minute reminder that your Training Session will begin in ${SessionReminderMinutes.FIVE} minutes.
-                ${result.result.booked_date}
-                <br/><br/>
-                Team NetQwix recommends logging in 2-5 minutes prior to your scheduled session.<br/><br/>
-                Thank You For Booking the Slot in NetQwix.
-                <br/><br/>
-                From,  <br/>
-                NetQwix Team. <br/>
-                <img src=${NetquixImage.logo} style="object-fit: contain; width: 180px;"/>
-              </div>`
+                `Reminder: Your session with ${trainee.fullname} starts in 5 minutes!!`,
               );
             }
             const smsService = new SMSService();
@@ -233,28 +218,21 @@ export class traineeController {
         cron.schedule(cronTime, async () => {
           console.log("Running Cron", cronTime);
           try {
+            const sessionStartTime = startTime.toJSDate()
+           
             // Send emails to both the trainee and trainer
             if (trainee.notifications.transactional.email) {
-
+              const traineeTime= DateTime.fromISO(sessionStartTime, { zone: 'utc' }).setZone(result.result.time_zone);
+              const traineeFormattedTime = traineeTime.toFormat("cccc, LLL dd'th' h:mm a ZZZZ");
               SendEmail.sendRawEmail(
-                null,
-                null,
+                "5-min-remainder",
+                {
+                  "{TRAINER/TRAINEE NAME}": trainer.fullname,
+                  "{MEETING_LINK}": meetingLink + result.result._id,
+                  "{SESSION_TIME}": traineeFormattedTime
+                },
                 [trainee.email],
-                `REMINDER: Your NetQwix Training Session Starts in ${SessionReminderMinutes.FIVE} minutes at ${result.result.booked_date}`,
-                null,
-                `<div style="font-family: Verdana,Arial,Helvetica,sans-serif;font-size: 18px;line-height: 30px;">
-                  <i  style='color:#ff0000'>${trainee.fullname},</i>
-                  <br/><br/>
-                  This is your ${SessionReminderMinutes.FIVE} minute reminder that your Training Session will begin in ${SessionReminderMinutes.FIVE} minutes.
-                  ${result.result.booked_date}
-                  <br/><br/>
-                  Team NetQwix recommends logging in 2-5 minutes prior to your scheduled session.<br/><br/>
-                  Thank You For Booking the Slot in NetQwix.
-                  <br/><br/>
-                  From,  <br/>
-                  NetQwix Team. <br/>
-                  <img src=${NetquixImage.logo} style="object-fit: contain; width: 180px;"/>
-                </div>`
+                `Reminder: Your session with ${trainer.fullname} starts in 5 minutes!!`,
               );
             }
             const covertedBookedTime = CovertTimeAccordingToTimeZone(
@@ -265,26 +243,18 @@ export class traineeController {
               }
             );
             if (trainer.notifications.transactional.email) {
+              const trainerTime= DateTime.fromISO(sessionStartTime, { zone: 'utc' }).setZone(trainer.extraInfo.availabilityInfo.timeZone);
+              const trainerFormattedTime = trainerTime.toFormat("cccc, LLL dd'th' h:mm a ZZZZ");
 
               SendEmail.sendRawEmail(
-                null,
-                null,
+                "5-min-remainder",
+                {
+                  "{TRAINER/TRAINEE NAME}": trainee.fullname,
+                  "{MEETING_LINK}": meetingLink + result.result._id,
+                  "{SESSION_TIME}": trainerFormattedTime
+                },
                 [trainer.email],
-                `REMINDER: Your NetQwix Training Session Starts in ${SessionReminderMinutes.FIVE} minutes at ${covertedBookedTime}`,
-                null,
-                `<div style="font-family: Verdana,Arial,Helvetica,sans-serif;font-size: 18px;line-height: 30px;">
-                    <i  style='color:#ff0000'>${trainer.fullname},</i>
-                    <br/><br/>
-                    This is your ${SessionReminderMinutes.FIVE} minute reminder that your Training Session will begin in ${SessionReminderMinutes.FIVE} minutes.
-                    ${covertedBookedTime}
-                    <br/><br/>
-                    Team NetQwix recommends logging in 2-5 minutes prior to your scheduled session.<br/><br/>
-                    Thank You For Booking the Slot in NetQwix.
-                    <br/><br/>
-                    From,  <br/>
-                    NetQwix Team. <br/>
-                    <img src=${NetquixImage.logo} style="object-fit: contain; width: 180px;"/>
-                  </div>`
+                `Reminder: Your session with ${trainee.fullname} starts in 5 minutes!!`,
               );
             }
 

@@ -18,3 +18,11 @@ export class Constant {
     updatedAt: 1,
   }
 }
+
+export const timeZoneAbbreviations = {
+  "Asia/Calcutta": "IST",
+  "America/New_York": "EST",
+  "America/Los_Angeles": "PST",
+  "America/Denver": "MST",
+  "America/Chicago": "CST",
+};

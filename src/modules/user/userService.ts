@@ -21,10 +21,11 @@ import { DateFormat } from "../../Utils/dateFormat";
 import { getSearchRegexQuery } from "../../helpers/mongoose";
 import { stripeHelperController } from "../stripe/stripeHelperController";
 import raise_concern from "../../model/raise_concern.schema";
-import { Constant } from "../../Utils/constant";
+import { Constant, timeZoneAbbreviations } from "../../Utils/constant";
 import onlineUser from "../../model/online_user.schema";
 import SMSService from "../../services/sms-service";
 import user from "../../model/user.schema";
+import { DateTime } from "luxon";
 const stripe = require("stripe")(process.env.STRIPE_SECRET);
 
 export class UserService {
@@ -87,26 +88,48 @@ export class UserService {
           const traineeName = traineeInfo.fullname;
           const trainerName = trainerInfo.fullname;
           if (traineeInfo.notifications.transactional.email) {
-            SendEmail.sendRawEmail(
-              null,
-              null,
-              [traineeInfo.email],
-              `NetQwix Training Session has been ${payload.booked_status}`,
-              null,
-              `<div style="font-family: Verdana,Arial,Helvetica,sans-serif;font-size: 18px;line-height: 30px;">
-          Hello <i  style='color:#ff0000'>${traineeName},</i>
-          <br/><br/>
-           Your NetQwix Training Session has been ${payload.booked_status} by your trainer <b><i style='color:#ff0000'>${trainerName}</i></b>
-            for <b><i style='color:#ff0000'> ${bookedDate}.
-           The session will last up to ${sessionDuration}.</i></b>
-           <br/>
-          Thank You
-          <br/>
-          Team NetQwix.
-          <br/>
-          <img src=${NetquixImage.logo} style="object-fit: contain; width: 180px;"/>
-           </div> `
-            );
+            const meetingLink = process.env.FRONTEND_URL_SMS + "/meeting?id=" + result._id;
+            const startTime = DateTime.fromJSDate(result.start_time, { zone: 'utc' })
+            console.log("startTime",startTime)
+            console.log("startTime2",result.start_time)
+            const trainerFormattedTime = `${startTime.toFormat("EEEE, MMMM d'th' h:mm a")} ${timeZoneAbbreviations[result.time_zone] || result.time_zone}`
+            
+            if (payload.booked_status === "confirmed") {
+              SendEmail.sendRawEmail(
+                "session-confirmation",
+                {
+                  "[TRAINEE FIRST NAME]": traineeName.split(" ")[0],
+                  "[SESSION DURATION]": sessionDuration,
+                  "[TRAINER NAME]": trainerName,
+                  "[session date and time in trainee timezone]": trainerFormattedTime,
+                  "[MEETING_LINK]": meetingLink
+                },
+                [traineeInfo.email],
+                `NetQwix Training Session is Confirmed`,
+              );
+            } else {
+              SendEmail.sendRawEmail(
+                null,
+                null,
+                [traineeInfo.email],
+                `NetQwix Training Session has been ${payload.booked_status}`,
+                null,
+                `<div style="font-family: Verdana,Arial,Helvetica,sans-serif;font-size: 18px;line-height: 30px;">
+            Hello <i  style='color:#ff0000'>${traineeName},</i>
+            <br/><br/>
+             Your NetQwix Training Session has been ${payload.booked_status} by your trainer <b><i style='color:#ff0000'>${trainerName}</i></b>
+              for <b><i style='color:#ff0000'> ${bookedDate}.
+             The session will last up to ${sessionDuration}.</i></b>
+             <br/>
+            Thank You
+            <br/>
+            Team NetQwix.
+            <br/>
+            <img src=${NetquixImage.logo} style="object-fit: contain; width: 180px;"/>
+             </div> `
+              );
+            }
+
           }
           const meetingLink = process.env.FRONTEND_URL_SMS + "/meeting?id="
           console.log("meeting link", meetingLink + bookedSessionDetail._id)
@@ -268,7 +291,7 @@ export class UserService {
         return ResponseBuilder.data({}, "");
       }
     } catch (err) {
-      console.log("error",err)
+      console.log("error", err)
       return ResponseBuilder.error(err, l10n.t("ERR_INTERNAL_SERVER"));
     }
   }
