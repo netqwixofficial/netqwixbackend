@@ -35,7 +35,8 @@ export class Utils {
     if (durationHours === 0) {
       return `${durationMinutes} minutes`;
     }
-    return `${durationHours} hours and ${durationMinutes} minutes`;
+    
+    return `${durationHours} hours`;
   };
 
   public static getCurrentHourAndMinute = () => {
