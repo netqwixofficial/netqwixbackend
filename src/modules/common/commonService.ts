@@ -20,11 +20,11 @@ import * as AWS from "aws-sdk";
 import mongoose from "mongoose";
 import booked_session from "../../model/booked_sessions.schema";
 import { ResponseBuilder } from "../../helpers/responseBuilder";
-import user from "../../model/user.schema";
 import { Constant } from "../../Utils/constant";
 import sharp = require("sharp");
 import ReferredUser from "../../model/referred.user.schema";
 import { SendEmail } from "../../Utils/sendEmail";
+import user from "../../model/user.schema";
 const bucketName = process.env.AWS_BUCKET_NAME;
 const region = process.env.AWS_REGION;
 const accessKeyId = process.env.AWS_ACCESS_KEY_ID;
@@ -113,7 +113,7 @@ export class commonService {
 
   private async processInvites(invites: string[], referrerUser): Promise<string[]> {
     const userIds: string[] = [];
-    
+
     for (const inviteEmail of invites) {
       try {
         // Check if a user with this email already exists in the User collection
@@ -136,11 +136,11 @@ export class commonService {
           // If the user exists, push their ID into userIds
           userIds.push(existingUser._id);
 
-          
+
         } else {
           // Check if the email exists in the ReferredUser collection
           const existingReferredUser = await ReferredUser.findOne<any>({ email: inviteEmail });
-  
+
           if (existingReferredUser) {
             // If the referred user exists, push their ID into userIds
             userIds.push(existingReferredUser._id);
@@ -150,14 +150,14 @@ export class commonService {
               email: inviteEmail,
               referrerId: referrerUser._id,
             });
-  
+
             // Save the referred user and push their ID into userIds
             const savedReferredUser = await referredUser.save();
             userIds.push(savedReferredUser._id);
           }
         }
-        
-        if(referrerUser._id !== existingUser._id){
+
+        if (referrerUser._id !== existingUser._id) {
           SendEmail.sendRawEmail(
             null,
             "",
@@ -173,19 +173,17 @@ export class commonService {
         // You may want to handle the error further (e.g., log it, throw it, etc.)
       }
     }
-  
+
     return userIds;
   }
-  
+
 
   public async videoUploadUrl(req: any, res: Response) {
     try {
-      if(!req.body.user_id){
-        req.body.user_id = [req?.authUser?._id];
-      }
-      if (req.body.invites  && Array.isArray(req.body.invites)) {
+
+      if (req.body.invites && Array.isArray(req.body.invites)) {
         const userIds = await this.processInvites(req.body.invites, req.authUser);
-        req.body.user_id = [...req.body.user_id ,  ...userIds];
+        req.body.user_id = [...req.body.user_id, ...userIds];
       }
 
       var fileName =
@@ -200,23 +198,68 @@ export class commonService {
 
       req.body.file_name = fileName;
       req.body.thumbnail = thumbnailFileName;
-      const clipObj = new clip(req.body);
-      
-      await clipObj.save();
 
-      let fileUrl = await this.generatePreSignedPutUrl(
-        fileName,
-        req?.body?.fileType
-      );
+      if (req.body.user_id) {
+        const clipObj = new clip(req.body);
 
-      let thumbnailURL = await this.generatePreSignedPutUrl(
-        thumbnailFileName,
-        req?.body?.thumbnail
-      );
+        await clipObj.save();
 
-      return res
-        .status(CONSTANCE.RES_CODE.success)
-        .json({ success: 1, url: fileUrl, thumbnailURL , clipObj });
+        let fileUrl = await this.generatePreSignedPutUrl(
+          fileName,
+          req?.body?.fileType
+        );
+
+        let thumbnailURL = await this.generatePreSignedPutUrl(
+          thumbnailFileName,
+          req?.body?.thumbnail
+        );
+
+        for (const id of req.body.user_id) {
+          const fetchUser = await user.findById(id);
+          if (!fetchUser) {
+            console.log(`User with ID ${id} not found`);
+            continue;
+          }
+
+          SendEmail.sendRawEmail(
+            "clip-shared",
+            {
+              "[TRAINER/TRAINEE NAME]": req.authUser.fullname,
+              "[TRAINER/TRAINEE NAME2]": req.authUser.fullname,
+              "[PROFILE_PICTURE]": `https://data.netqwix.com/${req.authUser.profile_picture}`
+            },
+            fetchUser.email,
+            `Your friend ${req.authUser.fullname} has uploaded a video in your NetQwix Locker!`,
+          );
+        }
+
+        return res
+          .status(CONSTANCE.RES_CODE.success)
+          .json({ success: 1, url: fileUrl, thumbnailURL, clipObj });
+      }
+      else {
+        req.body.user_id = [req?.authUser?._id]
+        const clipObj = new clip(req.body);
+
+        await clipObj.save();
+
+        let fileUrl = await this.generatePreSignedPutUrl(
+          fileName,
+          req?.body?.fileType
+        );
+
+        let thumbnailURL = await this.generatePreSignedPutUrl(
+          thumbnailFileName,
+          req?.body?.thumbnail
+        );
+
+        return res
+          .status(CONSTANCE.RES_CODE.success)
+          .json({ success: 1, url: fileUrl, thumbnailURL, clipObj });
+
+      }
+
+
     } catch (error) {
       res.status(CONSTANCE.RES_CODE.error.internalServerError).json({
         success: 0,
@@ -329,12 +372,12 @@ export class commonService {
   public async getClips(req: any, res: Response) {
     try {
       const trainee_id = req.body.trainee_id ?? null;
-  
+
       var clips = await clip.aggregate([
         {
           $match: {
-            user_id: { 
-              $in: [new mongoose.Types.ObjectId(trainee_id ?? req?.authUser?._id)] 
+            user_id: {
+              $in: [new mongoose.Types.ObjectId(trainee_id ?? req?.authUser?._id)]
             },
             $or: [{ status: true }, { status: { $exists: false } }],
           },
@@ -348,7 +391,7 @@ export class commonService {
           },
         },
       ]);
-  
+
       return res.status(CONSTANCE.RES_CODE.success).json({ data: clips });
     } catch (error) {
       res.status(CONSTANCE.RES_CODE.error.internalServerError).json({
@@ -478,16 +521,16 @@ export class commonService {
       if (!req.file) {
         return res.status(400).json({ success: 0, message: 'No video file uploaded.' });
       }
-     
+
       const inputPath = req.file.path;
       const thumbnailDir = path.join(__dirname, '..', 'thumbnails'); // Adjust this path as needed
       const outputPath = path.join(thumbnailDir, `${req.file.filename}.jpg`);
-  
+
       // Ensure the thumbnail directory exists
       if (!fs.existsSync(thumbnailDir)) {
         fs.mkdirSync(thumbnailDir, { recursive: true });
       }
-  
+
       return new Promise<void>((resolve, reject) => {
         ffmpeg(inputPath)
           .screenshots({
@@ -498,13 +541,13 @@ export class commonService {
           })
           .on('end', () => {
             fs.unlinkSync(inputPath); // Remove the uploaded video file
-  
+
             // Check if the thumbnail file exists
             if (!fs.existsSync(outputPath)) {
               reject(new Error('Thumbnail file not created'));
               return;
             }
-  
+
             // Send the thumbnail file
             res.sendFile(outputPath, (err) => {
               if (err) {
@@ -522,7 +565,7 @@ export class commonService {
             reject(err);
           });
       });
-  
+
     } catch (error) {
       res.status(CONSTANCE.RES_CODE.error.internalServerError).json({
         success: 0,
@@ -538,17 +581,17 @@ export class commonService {
     //   if (!req.file) {
     //     return res.status(400).json({ success: 0, message: 'No video file uploaded.' });
     //   }
-     
+
     //   inputPath = req.file.path;
     //   const thumbnailDir = path.join(__dirname, '..', 'thumbnails'); // Adjust this path as needed
     //   tempOutputPath = path.join(thumbnailDir, `${req.file.filename}_temp.jpg`);
     //   finalOutputPath = path.join(thumbnailDir, `${req.file.filename}.jpg`);
-  
+
     //   // Ensure the thumbnail directory exists
     //   if (!fs.existsSync(thumbnailDir)) {
     //     fs.mkdirSync(thumbnailDir, { recursive: true });
     //   }
-  
+
     //   await new Promise<void>((resolve, reject) => {
     //     ffmpeg(inputPath!)
     //       .inputOptions(['-ss 00:00:01'])
@@ -584,7 +627,7 @@ export class commonService {
     //       })
     //       .run();
     //   });
-  
+
     // } catch (error) {
     //   console.error('Thumbnail generation error:', error);
     //   this.cleanupFiles(inputPath, tempOutputPath, finalOutputPath);
@@ -613,5 +656,5 @@ export class commonService {
     // }
   }
 
-  
+
 }
