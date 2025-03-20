@@ -200,10 +200,6 @@ export class commonService {
       req.body.thumbnail = thumbnailFileName;
 
       if (req.body.user_id) {
-        const clipObj = new clip(req.body);
-
-        await clipObj.save();
-
         let fileUrl = await this.generatePreSignedPutUrl(
           fileName,
           req?.body?.fileType
@@ -213,8 +209,14 @@ export class commonService {
           thumbnailFileName,
           req?.body?.thumbnail
         );
-
+        let clips = [];
         for (const id of req.body.user_id) {
+          const clipObj = new clip({ ...req.body, user_id: id });
+
+          await clipObj.save();
+
+          clips.push(clipObj);
+
           const fetchUser = await user.findById(id);
           if (!fetchUser) {
             console.log(`User with ID ${id} not found`);
@@ -235,7 +237,7 @@ export class commonService {
 
         return res
           .status(CONSTANCE.RES_CODE.success)
-          .json({ success: 1, url: fileUrl, thumbnailURL, clipObj });
+          .json({ success: 1, url: fileUrl, thumbnailURL, clips });
       }
       else {
         req.body.user_id = [req?.authUser?._id]

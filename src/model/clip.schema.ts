@@ -26,7 +26,7 @@ const clipSchema: Schema = new Schema(
       type: String,
     },
     user_id: {
-      type: [Schema.Types.ObjectId],
+      type: Schema.Types.ObjectId,
       ref: "users",
     },
     user_type: {
