@@ -658,5 +658,66 @@ export class commonService {
     // }
   }
 
+  public async featuredContentUploadUrl(req: any, res: Response) {
+    try {
+      if (!req.body.user_id) {
+        req.body.user_id = [req?.authUser?._id];
+      }
+      if (req.body.invites && Array.isArray(req.body.invites)) {
+        const userIds = await this.processInvites(req.body.invites, req.authUser);
+        req.body.user_id = [...req.body.user_id, ...userIds];
+      }
+
+      if (!req?.body?.fileType || !req?.body?.thumbnail) {
+        return res.status(CONSTANCE.RES_CODE.error.badRequest).json({
+          success: 0,
+          message: "fileType and thumbnail are required.",
+        });
+      }
+      const timestamp = new Date().getTime().toString();
+      const fileType = req?.body?.fileType?.split("/")[1];
+      const thumbnailType = req?.body?.thumbnail?.split("/")[1];
+
+      if (!fileType || !thumbnailType) {
+        return res.status(CONSTANCE.RES_CODE.error.badRequest).json({
+          success: 0,
+          message: "Invalid fileType or thumbnail format.",
+        });
+      }
+
+      const fileName = `${timestamp}.${fileType}`;
+      const thumbnailFileName = `${timestamp}.${thumbnailType}`;
+
+      req.body.file_name = fileName;
+      req.body.thumbnail = thumbnailFileName;
+
+      const fileUrl = await this.generatePreSignedPutUrl(fileName, req.body.fileType);
+      const thumbnailURL = await this.generatePreSignedPutUrl(thumbnailFileName, req.body.thumbnail);
+
+      console.log("Generated File URL:", fileUrl);
+      console.log("Generated Thumbnail URL:", thumbnailURL);
+
+      if (!fileUrl || !thumbnailURL) {
+        return res.status(CONSTANCE.RES_CODE.error.internalServerError).json({
+          success: 0,
+          message: "Failed to generate pre-signed URLs.",
+        });
+      }
+
+      return res.status(CONSTANCE.RES_CODE.success).json({
+        success: 1,
+        url: fileUrl,
+        thumbnailURL,
+      });
+
+    } catch (error) {
+      console.error("Error in featuredContentUploadUrl:", error);
+      return res.status(CONSTANCE.RES_CODE.error.internalServerError).json({
+        success: 0,
+        message: Message.internal,
+        error: error.message
+      });
+    }
+  }
 
 }

@@ -146,4 +146,15 @@ export class commonController {
       return res.status(statusCode).json({ status: "error", message: errorMessage });
     }
   };
+
+  public featuredContentUploadUrl = async (req: Request, res: Response) => {
+    try {
+      const response = await this.commonService.featuredContentUploadUrl(req, res);
+      return response;
+    } catch(error) {
+      const statusCode = error.code ? error.code : CONSTANCE.RES_CODE.error.internalServerError;
+      const errorMessage = error.message || "Internal Server Error";
+      return res.status(statusCode).json({status: "error", message: errorMessage});
+    }
+  };
 }

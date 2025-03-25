@@ -47,4 +47,5 @@ route.delete('/delete-clip/:id', commonC.deleteClip);
 route.delete('/delete-saved-session/:id', commonC.deleteSavedSession);
 route.put("/update-profile-picture", commonC.profileImageUrl);
 route.post("/generate-thumbnail", upload.single('video'), commonC.generateThumbnail);
+route.post("/featured-content-upload-url", commonC.featuredContentUploadUrl);
 export const commonRoute: Router = route;
