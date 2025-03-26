@@ -7,6 +7,7 @@ import {
   utcOffset,
 } from "../config/constance";
 import { DateTime } from "luxon";
+import axios from "axios";
 export class Utils {
   public static formatDateWithTimeStamp = (date: string): string => {
     return `${date}${mongodbDate.timeStamp}`;
@@ -35,8 +36,8 @@ export class Utils {
     if (durationHours === 0) {
       return `${durationMinutes} minutes`;
     }
-    if(durationHours === 1){
-    return `${durationHours} hour`;
+    if (durationHours === 1) {
+      return `${durationHours} hour`;
     }
     return `${durationHours} hours`;
   };
@@ -139,7 +140,7 @@ export class Utils {
     console.log(availability, availabilityInfo);
     const slots = [];
     const trainerTimeZone = availabilityInfo.timeZone;
-    
+
 
     const bookedDateTime = DateTime.fromISO(booked_date, {
       zone: "utc",
@@ -193,8 +194,8 @@ export class Utils {
         });
 
         // Skip the slot if it has already passed
-        console.log("currentTime",currentTime)
-        console.log("startTime",startTime)
+        console.log("currentTime", currentTime)
+        console.log("startTime", startTime)
 
         if (startTime < currentTime) {
           console.log(`Skipping expired slot: ${startTime.toISO()}`);
@@ -240,7 +241,7 @@ export const getTimeZoneOffset = (timeZone) => {
 };
 
 export const CovertTimeAccordingToTimeZone = (time, timeZone) => {
-  
+
   // If the time zones are different, calculate the offset difference and adjust time
   const fromOffset = getTimeZoneOffset(timeZone.from); // Get the offset for the provided time zone
   const toOffset = getTimeZoneOffset(timeZone.to); // Get the offset for the local time zone
@@ -252,16 +253,16 @@ export const CovertTimeAccordingToTimeZone = (time, timeZone) => {
   console.log("Time Zones:", timeZone);
 
 
-    let date;
+  let date;
 
-    // Check if the time is a Date object
-    if (time instanceof Date) {
-      // If it's a Date object, use fromJSDate
-      date = DateTime.fromJSDate(time, { zone: "utc" });
-    } else {
-      // If it's a string, use fromISO
-      date = DateTime.fromISO(time, { zone: "utc" });
-    }
+  // Check if the time is a Date object
+  if (time instanceof Date) {
+    // If it's a Date object, use fromJSDate
+    date = DateTime.fromJSDate(time, { zone: "utc" });
+  } else {
+    // If it's a string, use fromISO
+    date = DateTime.fromISO(time, { zone: "utc" });
+  }
 
   console.log("Original DateTime (UTC):", date.toISO());
 
@@ -285,14 +286,71 @@ export function isOverlap(slot1, slot2) {
       day: today.day,
     });
   };
-  console.log("slot1 type",typeof slot1.start,typeof slot1.end)
-  console.log("slot2 type",typeof slot2.start,typeof slot2.end)
+  console.log("slot1 type", typeof slot1.start, typeof slot1.end)
+  console.log("slot2 type", typeof slot2.start, typeof slot2.end)
   const start1 = parseSlot1Time(slot1.start);
   const end1 = parseSlot1Time(slot1.end);
   const start2 = DateTime.fromJSDate(slot2.start, { zone: 'utc' });
   const end2 = DateTime.fromJSDate(slot2.end, { zone: 'utc' });
-  console.log("start1",start1,"end1",end1)
-  console.log("start2",start2,"end2",end2)
+  console.log("start1", start1, "end1", end1)
+  console.log("start2", start2, "end2", end2)
   // Check if the time ranges overlap
   return start1 < end2 && end1 > start2;
+}
+
+export async function getIceServerCredentials() {
+  const TURN_KEY_ID = process.env.TURN_KEY_ID; // Your TURN key ID
+  const TURN_KEY_API_TOKEN = process.env.TURN_KEY_API_TOKEN; // Your API token
+  try {
+    // Call Cloudflare API to generate TURN credentials
+    const response = await axios.post(
+      `https://rtc.live.cloudflare.com/v1/turn/keys/${TURN_KEY_ID}/credentials/generate`,
+      { ttl: 21600 },
+      {
+        headers: {
+          Authorization: `Bearer ${TURN_KEY_API_TOKEN}`,
+          'Content-Type': 'application/json',
+        },
+      }
+    );
+
+    // Extract the generated ICE servers from the response
+    const { iceServers } = response.data;
+
+    console.log("iceServers", iceServers)
+
+    const formattedIceServers = [
+      { urls: iceServers.urls[0] },
+      { urls: iceServers.urls[1] },
+      {
+        urls: iceServers.urls[2], username: iceServers.username,
+        credential: iceServers.credential,
+      },
+      {
+        urls: iceServers.urls[3], username: iceServers.username,
+        credential: iceServers.credential,
+      },
+      {
+        urls: iceServers.urls[4], username: iceServers.username,
+        credential: iceServers.credential,
+      },
+      {
+        urls: iceServers.urls[5], username: iceServers.username,
+        credential: iceServers.credential,
+      },
+      {
+        urls: iceServers.urls[6], username: iceServers.username,
+        credential: iceServers.credential,
+      },
+      {
+        urls: iceServers.urls[7], username: iceServers.username,
+        credential: iceServers.credential,
+      }
+    ];
+    // Return the iceServers in the response
+    return formattedIceServers;
+
+  } catch (error) {
+    console.error('Error generating TURN credentials:', error.response?.data || error.message);
+  }
 }

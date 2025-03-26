@@ -263,6 +263,7 @@ export class commonService {
 
 
     } catch (error) {
+      console.log("error",error)
       res.status(CONSTANCE.RES_CODE.error.internalServerError).json({
         success: 0,
         message: Message.internal,

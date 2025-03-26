@@ -17,8 +17,10 @@ import { SendEmail } from "../../Utils/sendEmail";
 import user from "../../model/user.schema";
 import * as cron from "node-cron";
 import SMSService from "../../services/sms-service";
-import { CovertTimeAccordingToTimeZone } from "../../Utils/Utils";
+import { CovertTimeAccordingToTimeZone, getIceServerCredentials } from "../../Utils/Utils";
 import { timeZoneAbbreviations } from "../../Utils/constant";
+import axios from "axios";
+import booked_session from "../../model/booked_sessions.schema";
 
 export class traineeController {
   public logger = log.getLogger();
@@ -149,6 +151,12 @@ export class traineeController {
       ) {
         cron.schedule(cronTime, async () => {
           try {
+            const iceServers = await getIceServerCredentials()
+            console.log("iceServers",iceServers)
+            const session = await booked_session.findByIdAndUpdate(result.result._id,{
+              iceServers
+            })
+            await session.save()
             if (!trainee || !trainer) {
               return console.error("User not found.");
             }
@@ -159,7 +167,7 @@ export class traineeController {
 
             // Send emails to both the trainee and trainer
             if (trainee.notifications.transactional.email) {
-             
+
 
               SendEmail.sendRawEmail(
                 "5-min-remainder",
@@ -180,7 +188,7 @@ export class traineeController {
                 from: result.result.time_zone,
               }
             );
-            
+
             if (trainer.notifications.transactional.email) {
               SendEmail.sendRawEmail(
                 "5-min-remainder",
@@ -218,15 +226,22 @@ export class traineeController {
         });
       } else {
         cron.schedule(cronTime, async () => {
+          
           console.log("Running Cron", cronTime);
           try {
+            const iceServers = await getIceServerCredentials()
+            console.log("iceServers",iceServers)
+            const session = await booked_session.findByIdAndUpdate(result.result._id,{
+              iceServers
+            })
+            await session.save()
             const sessionStartTime = startTime.toJSDate()
-           
+
             // Send emails to both the trainee and trainer
             if (trainee.notifications.transactional.email) {
               const startTime = DateTime.fromJSDate(sessionStartTime, { zone: 'utc' })
               const traineeFormattedTime = `${startTime.toFormat("EEEE, MMMM d'th' h:mm a")} ${timeZoneAbbreviations[result.result.time_zone] || result.result.time_zone}`
-   
+
               SendEmail.sendRawEmail(
                 "5-min-remainder",
                 {
