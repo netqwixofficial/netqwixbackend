@@ -156,7 +156,7 @@ export class AuthService {
         {
           "[TRAINER_NAME]": createUser.fullname,
           "[TRAINER_NAME2]": createUser.fullname,
-          "[ADMIN_URL]": process.env.ADMIN_APP_URL
+          "[ADMIN_URL]": process.env.BASE_URL+"/user/approve-expert/"+userObj._id
         },
         [adminEmail],
         `NetQwix New Expert Sign Up Request from ${createUser.fullname}`,

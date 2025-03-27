@@ -1354,7 +1354,7 @@ export class UserService {
             <div class="success-icon">✓</div>
             <h1>${title}</h1>
             <p>${message}</p>
-            <a href="/admin/dashboard" class="btn">Go to Dashboard</a>
+            <a href=${process.env.ADMIN_APP_URL} class="btn">Go to Dashboard</a>
         </div>
     </body>
     </html>
