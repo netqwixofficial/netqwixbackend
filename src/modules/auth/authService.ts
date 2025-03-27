@@ -159,7 +159,7 @@ export class AuthService {
           "[ADMIN_URL]": process.env.ADMIN_APP_URL
         },
         [adminEmail],
-        `NetQwix New Trainer Request from ${createUser.fullname}`,
+        `NetQwix New Expert Sign Up Request from ${createUser.fullname}`,
       );
     }
 
