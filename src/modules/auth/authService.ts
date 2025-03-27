@@ -172,7 +172,7 @@ export class AuthService {
           "[TRAINER_NAME2]": createUser.fullname
         },
         [adminEmail],
-        `NetQwix New Enthusiast Sign Up  from ${createUser.fullname}`,
+        `NetQwix New Enthusiast Sign Up from ${createUser.fullname}`,
       );
     }
 
