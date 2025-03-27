@@ -232,7 +232,7 @@ export class userController {
         );
         result.result = result.result.filter(user => user.account_type !== "Admin");
 
-        console.log("results",result.result)
+        console.log("results", result.result)
 
         if (result.status !== CONSTANCE.FAIL) {
           res.status(result.code).json(result);
@@ -317,7 +317,7 @@ export class userController {
       if (req["authUser"]) {
         const { oldPhoneNumber, newPhoneNumber } = req.body;
         const result: ResponseBuilder =
-          await this.userService.updateMobileNumber(req.authUser,{old:oldPhoneNumber,new:newPhoneNumber});
+          await this.userService.updateMobileNumber(req.authUser, { old: oldPhoneNumber, new: newPhoneNumber });
         if (result.status !== CONSTANCE.FAIL) {
           res.status(result.code).json(result);
         } else {
@@ -338,7 +338,7 @@ export class userController {
       if (req["authUser"]) {
         const { notifications } = req.body;
         const result: ResponseBuilder =
-          await this.userService.updateNotificationSettings(req.authUser,notifications);
+          await this.userService.updateNotificationSettings(req.authUser, notifications);
         if (result.status !== CONSTANCE.FAIL) {
           res.status(result.code).json(result);
         } else {
@@ -396,9 +396,9 @@ export class userController {
       SendEmail.sendRawEmail(
         "friend-request",
         {
-          "[USER FULL NAME]":sender.fullname,
-          "[TRAINER/TRAINEE NAME]":sender.fullname,
-          "[USER_PROFILE_PIC]":`https://data.netqwix.com/${sender.profile_picture}`
+          "[USER FULL NAME]": sender.fullname,
+          "[TRAINER/TRAINEE NAME]": sender.fullname,
+          "[USER_PROFILE_PIC]": `https://data.netqwix.com/${sender.profile_picture}`
 
         },
         [receiver.email],
@@ -883,13 +883,13 @@ export class userController {
       return res.status(500).send({ status: CONSTANCE.FAIL, error: err.error });
     }
   };
-  
+
   public updateTrainerStatus = async (req, res) => {
     try {
       if (req["authUser"]) {
-        const {trainer_id,status} = req.body;
+        const { trainer_id, status } = req.body;
         const result: ResponseBuilder =
-          await this.userService.updateTrainerStatus(trainer_id,status);
+          await this.userService.updateTrainerStatus(trainer_id, status);
         if (result.status !== CONSTANCE.FAIL) {
           res.status(result.code).json(result);
         } else {
@@ -904,4 +904,23 @@ export class userController {
       return res.status(500).send({ status: CONSTANCE.FAIL, error: err.error });
     }
   };
+
+
+  public approveTrainer = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const htmlResponse = await this.userService.approveTrainer(id);
+        
+        // Set content type to HTML
+        res.setHeader('Content-Type', 'text/html');
+        res.send(htmlResponse);
+    } catch (err) {
+        const errorHtml = this.userService.getErrorHtml(
+            "Server Error", 
+            "An unexpected error occurred. Please try again later."
+        );
+        res.setHeader('Content-Type', 'text/html');
+        res.status(500).send(errorHtml);
+    }
+};
 }

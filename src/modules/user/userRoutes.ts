@@ -17,10 +17,22 @@ const V: validator = new validator();
 
 route.use([
   (req, res, next) => {
-    req.byPassRoute = ['/sign-up', '/stripe-account-verification', '/all-online-user'];
-    next();
-  },
-  authorizeMiddleware.authorizeUser,
+    req.byPassRoute = [
+      '/sign-up',
+      '/stripe-account-verification',
+      '/all-online-user'
+    ];
+    
+    if (req.path.startsWith('/approve-expert/')) {
+      return next();
+    }
+    
+    if (req.byPassRoute.includes(req.path)) {
+      return next();
+    }
+    
+    authorizeMiddleware.authorizeUser(req, res, next);
+  }
 ]);
 
 route.post(
@@ -100,5 +112,7 @@ route.get("/all-online-user",userC.getAllLatestOnlineUser);
 route.put("/update-mobile-number",userC.updateMobileNumber);
 route.patch("/update-notifications-settings",userC.updateNotificationSettings);
 route.put("/update-trainer-status",userC.updateTrainerStatus.bind(userC));
+route.get("/approve-expert/:id",userC.approveTrainer.bind(userC));
+
 
 export const userRoute: Router = route;

@@ -108,13 +108,13 @@ export class UserService {
                 `NetQwix Training Session is Confirmed`,
               );
             } else {
-          SendEmail.sendRawEmail(
-            null,
-            null,
-            [traineeInfo.email],
-            `NetQwix Training Session has been ${payload.booked_status}`,
-            null,
-            `<div style="font-family: Verdana,Arial,Helvetica,sans-serif;font-size: 18px;line-height: 30px;">
+              SendEmail.sendRawEmail(
+                null,
+                null,
+                [traineeInfo.email],
+                `NetQwix Training Session has been ${payload.booked_status}`,
+                null,
+                `<div style="font-family: Verdana,Arial,Helvetica,sans-serif;font-size: 18px;line-height: 30px;">
           Hello <i  style='color:#ff0000'>${traineeName},</i>
           <br/><br/>
            Your NetQwix Training Session has been ${payload.booked_status} by your trainer <b><i style='color:#ff0000'>${trainerName}</i></b>
@@ -127,7 +127,7 @@ export class UserService {
           <br/>
           <img src=${NetquixImage.logo} style="object-fit: contain; width: 180px;"/>
            </div> `
-          );
+              );
             }
 
           }
@@ -138,7 +138,7 @@ export class UserService {
           }
           if (trainerInfo.notifications.transactional.sms) {
             await smsService.sendSMS(trainerInfo.mobile_no, " NetQwix Training Session has been confirmed you may start the lesson using this link " + meetingLink + bookedSessionDetail._id);
-        }
+          }
         }
 
 
@@ -277,12 +277,12 @@ export class UserService {
         //     : "refer-trainee";
         if (userInfo._doc.notifications.promotional.email) {
           if (userInfo._doc.account_type === AccountType.TRAINER) {
-        SendEmail.sendRawEmail(
+            SendEmail.sendRawEmail(
               "refer-expert",
-          {
-            "{FULLNAME}": `${userInfo._doc.fullname}`,
+              {
+                "{FULLNAME}": `${userInfo._doc.fullname}`,
                 "{FULLNAME1}": `${userInfo._doc.fullname}`,
-            "{FULLNAME2}": `${userInfo._doc.fullname}`,
+                "{FULLNAME2}": `${userInfo._doc.fullname}`,
                 "{FULLNAME3}": `${userInfo._doc.fullname}`,
                 "{FIRSTNAME}": `${userInfo._doc.fullname.split(" ")[0]}`,
                 "{FIRSTNAME1}": `${userInfo._doc.fullname.split(" ")[0]}`,
@@ -290,11 +290,11 @@ export class UserService {
                 "{FIRSTNAME3}": `${userInfo._doc.fullname.split(" ")[0]}`,
                 "{FIRSTNAME4}": `${userInfo._doc.fullname.split(" ")[0]}`,
                 "{PROFILE_PIC}": `https://data.netqwix.com/${userInfo._doc.profile_picture}`,
-          },
-          [userInfo?.user_email],
-          `Exclusive Invitation to Join NetQwix Platform!`,
+              },
+              [userInfo?.user_email],
+              `Exclusive Invitation to Join NetQwix Platform!`,
               null,
-        );
+            );
 
           } else {
             SendEmail.sendRawEmail(
@@ -325,7 +325,7 @@ export class UserService {
       }
 
       const updatedUserInfo = await user.findByIdAndUpdate(userId, {
-          isPrivate,
+        isPrivate,
       }, { new: true });
 
       if (!updatedUserInfo) {
@@ -571,17 +571,17 @@ export class UserService {
       // Define the search filter
       const searchFilter = searchTerm
         ? {
-            $and: [
-              {
-                $or: [
-                  { fullname: { $regex: searchTerm, $options: "i" } },
-                  { email: { $regex: searchTerm, $options: "i" } },
-                ],
-              },
-              { isPrivate: { $ne: true } },
-              { _id: { $ne: _id } }, // Exclude the logged-in user
-            ],
-          }
+          $and: [
+            {
+              $or: [
+                { fullname: { $regex: searchTerm, $options: "i" } },
+                { email: { $regex: searchTerm, $options: "i" } },
+              ],
+            },
+            { isPrivate: { $ne: true } },
+            { _id: { $ne: _id } }, // Exclude the logged-in user
+          ],
+        }
         : { isPrivate: { $ne: true }, _id: { $ne: _id } }; // Exclude the logged-in user
 
       // Query the database with the filter
@@ -1246,7 +1246,7 @@ export class UserService {
         { new: true }
       );
       if (!trainer) {
-        return ResponseBuilder.error(null, "Trainer not found");
+        return ResponseBuilder.badRequest("Trainer not found");
       }
       return ResponseBuilder.data({
         code: 200,
@@ -1260,6 +1260,170 @@ export class UserService {
         l10n.t("ERR_INTERNAL_SERVER") || "Internal Server Error"
       );
     }
+  }
+
+  public async approveTrainer(trainerId: string): Promise<any> {
+    try {
+      console.log("Updating trainer status:", { trainerId });
+
+      // Find the trainer first
+      const trainer = await user.findById(trainerId);
+      console.log("trainer", trainer);
+
+      if (!trainer) {
+        return this.getErrorHtml("Trainer Not Found", "The trainer you're trying to approve doesn't exist.");
+      }
+
+      // Check if the current status is pending
+      if (trainer.status === "approved") {
+        return this.getErrorHtml("Already Approved", "This expert is already approved.");
+      }
+
+      if (trainer.status === "rejected") {
+        return this.getErrorHtml("Cannot Approve Rejected Expert",
+          "Expert is rejected. You cannot approve a rejected user using this link. Please update from admin panel.");
+      }
+
+      // Update the status to approved
+      trainer.status = "approved";
+      await trainer.save();
+
+      return this.getSuccessHtml("Trainer Approved", `Trainer ${trainer.name} approved successfully!`);
+    } catch (err) {
+      console.error("Error updating trainer status:", err);
+      return this.getErrorHtml("Server Error",
+        l10n.t("ERR_INTERNAL_SERVER") || "Internal Server Error");
+    }
+  }
+
+  private getSuccessHtml(title: string, message: string): string {
+    return `
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>${title}</title>
+        <style>
+            body {
+                font-family: 'Arial', sans-serif;
+                background-color: #f5f5f5;
+                margin: 0;
+                padding: 0;
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                height: 100vh;
+            }
+            .container {
+                background-color: white;
+                border-radius: 8px;
+                box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+                padding: 30px;
+                max-width: 500px;
+                text-align: center;
+            }
+            .success-icon {
+                color: #4CAF50;
+                font-size: 60px;
+                margin-bottom: 20px;
+            }
+            h1 {
+                color: #333;
+                margin-bottom: 20px;
+            }
+            p {
+                color: #666;
+                margin-bottom: 30px;
+                line-height: 1.6;
+            }
+            .btn {
+                display: inline-block;
+                background-color: #4CAF50;
+                color: white;
+                padding: 10px 20px;
+                text-decoration: none;
+                border-radius: 4px;
+                transition: background-color 0.3s;
+            }
+            .btn:hover {
+                background-color: #45a049;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="success-icon">✓</div>
+            <h1>${title}</h1>
+            <p>${message}</p>
+            <a href="/admin/dashboard" class="btn">Go to Dashboard</a>
+        </div>
+    </body>
+    </html>
+    `;
+  }
+
+  public getErrorHtml(title: string, message: string): string {
+    return `
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>${title}</title>
+        <style>
+            body {
+                font-family: 'Arial', sans-serif;
+                background-color: #f5f5f5;
+                margin: 0;
+                padding: 0;
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                height: 100vh;
+            }
+            .container {
+                background-color: white;
+                border-radius: 8px;
+                box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+                padding: 30px;
+                max-width: 500px;
+                text-align: center;
+            }
+            .error-icon {
+                color: #f44336;
+                font-size: 60px;
+                margin-bottom: 20px;
+            }
+            h1 {
+                color: #333;
+                margin-bottom: 20px;
+            }
+            p {
+                color: #666;
+                margin-bottom: 30px;
+                line-height: 1.6;
+            }
+            .btn {
+                display: inline-block;
+                background-color: #f44336;
+                color: white;
+                padding: 10px 20px;
+                text-decoration: none;
+                border-radius: 4px;
+                transition: background-color 0.3s;
+            }
+            .btn:hover {
+                background-color: #d32f2f;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="error-icon">✗</div>
+            <h1>${title}</h1>
+            <p>${message}</p>
+            <a href=${process.env.ADMIN_APP_URL} class="btn">Go to Dashboard</a>
+        </div>
+    </body>
+    </html>
+    `;
   }
 
 }
