@@ -149,17 +149,30 @@ export class AuthService {
       "Welcome to NetQwix!",
       "Thank you for joining!"
     );
+    const adminEmail = process.env.EMAIL_USER || "shubhamrakhecha5@gmail.com";
+
     if (createUser.account_type === AccountType.TRAINER) {
-      const adminEmail = process.env.EMAIL_USER || "shubhamrakhecha5@gmail.com";
       SendEmail.sendRawEmail(
         "new-trainer",
         {
           "[TRAINER_NAME]": createUser.fullname,
           "[TRAINER_NAME2]": createUser.fullname,
-          "[ADMIN_URL]": process.env.BASE_URL+"/user/approve-expert/"+userObj._id
+          "[ADMIN_URL]": process.env.BASE_URL + "/user/approve-expert/" + userObj._id
         },
         [adminEmail],
         `NetQwix New Expert Sign Up Request from ${createUser.fullname}`,
+      );
+    } else {
+      await user.findByIdAndUpdate(userObj._id, { status: "approved" },
+        { new: true })
+      SendEmail.sendRawEmail(
+        "new-trainee",
+        {
+          "[TRAINER_NAME]": createUser.fullname,
+          "[TRAINER_NAME2]": createUser.fullname
+        },
+        [adminEmail],
+        `NetQwix New Enthusiast Sign Up  from ${createUser.fullname}`,
       );
     }
 
