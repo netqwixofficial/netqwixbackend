@@ -1288,7 +1288,7 @@ export class UserService {
       trainer.status = "approved";
       await trainer.save();
 
-      return this.getSuccessHtml("Trainer Approved", `Trainer ${trainer.name} approved successfully!`);
+      return this.getSuccessHtml("Expert Approved", `Expert ${trainer.fullname} approved successfully!`);
     } catch (err) {
       console.error("Error updating trainer status:", err);
       return this.getErrorHtml("Server Error",
