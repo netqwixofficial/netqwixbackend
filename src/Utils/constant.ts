@@ -16,6 +16,7 @@ export class Constant {
     extraInfo: 1,
     createdAt: 1,
     updatedAt: 1,
+    status:1
   }
 }
 

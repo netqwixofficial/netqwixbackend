@@ -29,22 +29,22 @@ export class AuthService {
     this.log.info(createUser);
     let hashPassword: string;
     let account: any;
-    console.log("creating new user",createUser)
+    console.log("creating new user", createUser)
     // Check if a referred user with this email exists
     const referredUser = await ReferredUser.findOne({ email: createUser.email });
-  
+
     if (createUser.password) {
       hashPassword = await this.bcrypt.getHashedPassword(createUser.password);
     }
-  
+
     if (createUser.account_type === AccountType.TRAINER) {
       account = await stripeHelperController.createAccount(createUser);
     } else if (createUser.account_type === AccountType.TRAINEE) {
       account = await stripeHelperController.createCustomer(createUser);
     }
-  
+
     const global_commission = await admin_setting.findOne();
-  
+
     let updateduserObj: {
       password: string;
       login_type: LoginType;
@@ -63,9 +63,9 @@ export class AuthService {
           selectedDuration: number;
           timeZone: string;
         };
-        hourly_rate:string
+        hourly_rate: string
       };
-  } = {
+    } = {
       ...createUser,
       password: createUser.password ? hashPassword : null,
       login_type: Boolean(createUser.isGoogleRegister)
@@ -80,7 +80,7 @@ export class AuthService {
     if (createUser.account_type === AccountType.TRAINER) {
       updateduserObj = {
         ...updateduserObj,
-        extraInfo:{
+        extraInfo: {
           availabilityInfo: {
             availability: {
               Sun: [{ start: "9:00 AM", end: "5:00 PM" }],
@@ -98,22 +98,24 @@ export class AuthService {
         },
       };
     }
-  
+
     delete createUser.isGoogleRegister;
-  
+
     // Create the user object, but replace its _id if referredUser exists
     const userObj = referredUser
       ? new user({ ...updateduserObj, _id: referredUser._id }) // Use referred user's _id
       : new user(updateduserObj); // Create a new user normally
 
-  
+
     await userObj.save();
-  
+
+
+
     // Remove the referred user from the ReferredUser collection if it was created from there
     if (referredUser) {
       await ReferredUser.deleteOne({ _id: referredUser._id });
     }
-    
+
     // SendEmail.sendRawEmail(
     //   null,
     //   "",
@@ -136,17 +138,31 @@ export class AuthService {
     // );
 
     const emailTemplate =
-    createUser.account_type === AccountType.TRAINER
-      ? "trainer-welcome"
-      : "trainee-welcome";
+      createUser.account_type === AccountType.TRAINER
+        ? "trainer-welcome"
+        : "trainee-welcome";
 
     SendEmail.sendRawEmail(
       emailTemplate,
       null,
       [createUser.email],
-      "Welcome to NetQwix!", 
-      "Thank you for joining!" 
+      "Welcome to NetQwix!",
+      "Thank you for joining!"
     );
+    if (createUser.account_type === AccountType.TRAINER) {
+      const adminEmail = process.env.EMAIL_USER || "shubhamrakhecha5@gmail.com";
+      SendEmail.sendRawEmail(
+        "new-trainer",
+        {
+          "[TRAINER_NAME]": createUser.fullname,
+          "[TRAINER_NAME2]": createUser.fullname,
+          "[ADMIN_URL]": process.env.ADMIN_APP_URL
+        },
+        [adminEmail],
+        `NetQwix New Trainer Request from ${createUser.fullname}`,
+      );
+    }
+
 
     return ResponseBuilder.data(userObj, l10n.t("USER_CREATED_SUCCESS"));
   };
@@ -228,7 +244,7 @@ export class AuthService {
         account_type: userInfo.account_type,
       });
       const url = `${process.env.FRONTEND_URL}/auth/verified-forget-password?token=${token}`;
-      
+
       SendEmail.sendRawEmail(
         null,
         null,

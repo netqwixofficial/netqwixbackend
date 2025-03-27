@@ -108,26 +108,26 @@ export class UserService {
                 `NetQwix Training Session is Confirmed`,
               );
             } else {
-              SendEmail.sendRawEmail(
-                null,
-                null,
-                [traineeInfo.email],
-                `NetQwix Training Session has been ${payload.booked_status}`,
-                null,
-                `<div style="font-family: Verdana,Arial,Helvetica,sans-serif;font-size: 18px;line-height: 30px;">
-            Hello <i  style='color:#ff0000'>${traineeName},</i>
-            <br/><br/>
-             Your NetQwix Training Session has been ${payload.booked_status} by your trainer <b><i style='color:#ff0000'>${trainerName}</i></b>
-              for <b><i style='color:#ff0000'> ${bookedDate}.
-             The session will last up to ${sessionDuration}.</i></b>
-             <br/>
-            Thank You
-            <br/>
-            Team NetQwix.
-            <br/>
-            <img src=${NetquixImage.logo} style="object-fit: contain; width: 180px;"/>
-             </div> `
-              );
+          SendEmail.sendRawEmail(
+            null,
+            null,
+            [traineeInfo.email],
+            `NetQwix Training Session has been ${payload.booked_status}`,
+            null,
+            `<div style="font-family: Verdana,Arial,Helvetica,sans-serif;font-size: 18px;line-height: 30px;">
+          Hello <i  style='color:#ff0000'>${traineeName},</i>
+          <br/><br/>
+           Your NetQwix Training Session has been ${payload.booked_status} by your trainer <b><i style='color:#ff0000'>${trainerName}</i></b>
+            for <b><i style='color:#ff0000'> ${bookedDate}.
+           The session will last up to ${sessionDuration}.</i></b>
+           <br/>
+          Thank You
+          <br/>
+          Team NetQwix.
+          <br/>
+          <img src=${NetquixImage.logo} style="object-fit: contain; width: 180px;"/>
+           </div> `
+          );
             }
 
           }
@@ -138,7 +138,7 @@ export class UserService {
           }
           if (trainerInfo.notifications.transactional.sms) {
             await smsService.sendSMS(trainerInfo.mobile_no, " NetQwix Training Session has been confirmed you may start the lesson using this link " + meetingLink + bookedSessionDetail._id);
-          }
+        }
         }
 
 
@@ -277,12 +277,12 @@ export class UserService {
         //     : "refer-trainee";
         if (userInfo._doc.notifications.promotional.email) {
           if (userInfo._doc.account_type === AccountType.TRAINER) {
-            SendEmail.sendRawEmail(
+        SendEmail.sendRawEmail(
               "refer-expert",
-              {
-                "{FULLNAME}": `${userInfo._doc.fullname}`,
+          {
+            "{FULLNAME}": `${userInfo._doc.fullname}`,
                 "{FULLNAME1}": `${userInfo._doc.fullname}`,
-                "{FULLNAME2}": `${userInfo._doc.fullname}`,
+            "{FULLNAME2}": `${userInfo._doc.fullname}`,
                 "{FULLNAME3}": `${userInfo._doc.fullname}`,
                 "{FIRSTNAME}": `${userInfo._doc.fullname.split(" ")[0]}`,
                 "{FIRSTNAME1}": `${userInfo._doc.fullname.split(" ")[0]}`,
@@ -290,11 +290,11 @@ export class UserService {
                 "{FIRSTNAME3}": `${userInfo._doc.fullname.split(" ")[0]}`,
                 "{FIRSTNAME4}": `${userInfo._doc.fullname.split(" ")[0]}`,
                 "{PROFILE_PIC}": `https://data.netqwix.com/${userInfo._doc.profile_picture}`,
-              },
-              [userInfo?.user_email],
-              `Exclusive Invitation to Join NetQwix Platform!`,
+          },
+          [userInfo?.user_email],
+          `Exclusive Invitation to Join NetQwix Platform!`,
               null,
-            );
+        );
 
           } else {
             SendEmail.sendRawEmail(
@@ -325,7 +325,7 @@ export class UserService {
       }
 
       const updatedUserInfo = await user.findByIdAndUpdate(userId, {
-        isPrivate,
+          isPrivate,
       }, { new: true });
 
       if (!updatedUserInfo) {
@@ -571,17 +571,17 @@ export class UserService {
       // Define the search filter
       const searchFilter = searchTerm
         ? {
-          $and: [
-            {
-              $or: [
-                { fullname: { $regex: searchTerm, $options: "i" } },
-                { email: { $regex: searchTerm, $options: "i" } },
-              ],
-            },
-            { isPrivate: { $ne: true } },
-            { _id: { $ne: _id } }, // Exclude the logged-in user
-          ],
-        }
+            $and: [
+              {
+                $or: [
+                  { fullname: { $regex: searchTerm, $options: "i" } },
+                  { email: { $regex: searchTerm, $options: "i" } },
+                ],
+              },
+              { isPrivate: { $ne: true } },
+              { _id: { $ne: _id } }, // Exclude the logged-in user
+            ],
+          }
         : { isPrivate: { $ne: true }, _id: { $ne: _id } }; // Exclude the logged-in user
 
       // Query the database with the filter
@@ -1211,6 +1211,7 @@ export class UserService {
             "trainer_info.stripe_account_id": "$trainer_info.stripe_account_id",
             "trainer_info.is_kyc_completed": "$trainer_info.is_kyc_completed",
             "trainer_info.extraInfo": "$trainer_info.extraInfo",
+            "trainer_info.status": "$trainer_info.status",
           },
         },
         {
@@ -1228,4 +1229,37 @@ export class UserService {
       return ResponseBuilder.error(err, l10n.t("ERR_INTERNAL_SERVER"));
     }
   }
+
+
+  public async updateTrainerStatus(
+    trainerId: string,
+    status: string
+  ): Promise<any> {
+    try {
+      console.log("Updating trainer status:", { trainerId, status });
+      if (!["approved", "rejected", "pending"].includes(status)) {
+        return ResponseBuilder.error(null, "Invalid status value");
+      }
+      const trainer = await user.findByIdAndUpdate(
+        trainerId,
+        { status: status },
+        { new: true }
+      );
+      if (!trainer) {
+        return ResponseBuilder.error(null, "Trainer not found");
+      }
+      return ResponseBuilder.data({
+        code: 200,
+        result: trainer,
+        msg: `Trainer ${status} successfully`,
+      });
+    } catch (err) {
+      console.error("Error updating trainer status:", err);
+      return ResponseBuilder.error(
+        err,
+        l10n.t("ERR_INTERNAL_SERVER") || "Internal Server Error"
+      );
+    }
+  }
+
 }

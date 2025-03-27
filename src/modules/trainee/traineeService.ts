@@ -202,6 +202,7 @@ export class TraineeService {
             stripe_account_id: 1,
             is_kyc_completed: 1,
             commission: 1,
+            status:1
           },
         },
       ];

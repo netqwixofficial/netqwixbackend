@@ -195,6 +195,7 @@ export class TrainerService {
             profile_picture: 1,
             category: 1,
             extraInfo: 1,
+            status:1,
           },
         },
       ]);
@@ -389,6 +390,7 @@ export class TrainerService {
         }
       ]
       const result = await booked_session.aggregate(pipeline);
+      console.log("result123",result)
       return ResponseBuilder.data(result, l10n.t("NO_TRAINERS_FOUND"));
     } catch (error) {
       console.log("====+", error)

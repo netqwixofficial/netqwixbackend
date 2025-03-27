@@ -78,6 +78,11 @@ const userSchema: Schema = new Schema(
         sms: { type: Boolean, default: true },
       },
     },
+    status: { // Added new field
+      type: String,
+      enum: ["pending", "approved", "rejected"],
+      default: "pending",
+    },
   },
   { timestamps: true }
 );
