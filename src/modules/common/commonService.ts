@@ -228,7 +228,7 @@ export class commonService {
             {
               "[TRAINER/TRAINEE NAME]": req.authUser.fullname,
               "[TRAINER/TRAINEE NAME2]": req.authUser.fullname,
-              "[PROFILE_PICTURE]": `https://data.netqwix.com/${req.authUser.profile_picture}`
+              "[PROFILE_PICTURE]": `https://data.netqwix.com/${clipObj.thumbnail}`
             },
             fetchUser.email,
             `Your friend ${req.authUser.fullname} has uploaded a video in your NetQwix Locker!`,
