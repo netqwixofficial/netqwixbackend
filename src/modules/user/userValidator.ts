@@ -1,6 +1,6 @@
 import { BOOKED_SESSIONS_STATUS } from "../../config/constance";
 import { model } from "../../model";
-import { IsEmail, IsNotEmpty, IsString, MinLength, MaxLength, IsEnum, IsNumber, Min, Max } from 'class-validator';
+import { IsEmail, IsNotEmpty, IsString, MinLength, MaxLength, IsEnum, IsNumber, Min, Max, IsOptional } from 'class-validator';
 export class signUpModel extends model {
     // checking validation
     @IsNotEmpty()
@@ -63,11 +63,11 @@ export class updateRatings extends model {
 
     public recommendRating: number;
 
-    @IsNotEmpty()
+    @IsOptional()
     @IsString()
     public title: string;
 
-    @IsNotEmpty()
+    @IsOptional()
     @IsString()
     remarksInfo: string;
 
