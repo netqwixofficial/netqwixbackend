@@ -183,7 +183,7 @@ export class commonService {
 
       if (req.body.invites && Array.isArray(req.body.invites)) {
         const userIds = await this.processInvites(req.body.invites, req.authUser);
-        req.body.user_id = [...req.body.user_id, ...userIds];
+        req.body.user_id = [...(req?.body?.user_id ?? []), ...userIds];
       }
 
       var fileName =
