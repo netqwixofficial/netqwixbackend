@@ -12,6 +12,7 @@ import * as webpush from "web-push";
 import notification from "../../model/notifications.schema";
 import user from "../../model/user.schema";
 import { NotificationType } from "../../enum/notification.enum";
+import mongoose from "mongoose";
 const logoPath = path.resolve(__dirname, "../../assets/netqwix_logo.png");
 
 const bucketName = process.env.AWS_BUCKET_NAME;
@@ -37,81 +38,86 @@ let activeUsers = {};
 
 // Update user's activity status
 async function updateUserActivity(socket) {
-  const userId = socket.user._id;
+  try {
+    const userId = socket.user._id;
 
-  // Add the current user to the active users list
+    // Add the current user to the active users list
 
-  if (socket?.user?._doc?.account_type === "Trainer") {
-    activeUsers[userId] = { ...socket.user._doc };
+    if (socket?.user?._doc?.account_type === "Trainer") {
+      activeUsers[userId] = { ...socket.user._doc };
 
-    if (socket.user._doc._id) {
-      const checkIfUserIsAlreadyAdded = await onlineUser.findOne({
-        trainer_id: socket.user._doc._id,
-      });
+      if (socket.user._doc._id) {
+        const checkIfUserIsAlreadyAdded = await onlineUser.findOne({
+          trainer_id: new mongoose.Types.ObjectId(socket.user._doc._id),
+        });
 
-      // console.log(
-      //   "checkIfUserIsAlreadyAdded=========",
-      //   checkIfUserIsAlreadyAdded
-      // );
+        // console.log(
+        //   "checkIfUserIsAlreadyAdded=========",
+        //   checkIfUserIsAlreadyAdded
+        // );
 
-      if (checkIfUserIsAlreadyAdded) {
-        await onlineUser.updateOne(
-          { trainer_id: socket.user._doc._id },
-          { $set: { last_activity_time: Date.now() } }
-        );
-      } else {
-        const createNewOnlineUser = new onlineUser({
-          trainer_id: socket.user._doc._id,
-          last_activity_time: Date.now(),
-        }).save();
+        if (checkIfUserIsAlreadyAdded) {
+          await onlineUser.updateOne(
+            { trainer_id: socket.user._doc._id },
+            { $set: { last_activity_time: Date.now() } }
+          );
+        } else {
+          const createNewOnlineUser = new onlineUser({
+            trainer_id: socket.user._doc._id,
+            last_activity_time: Date.now(),
+          }).save();
+        }
       }
     }
-  }
-
-  // Broadcast the updated active users list to all connected clients
-  socket.broadcast.emit("userStatus", {
-    user: activeUsers,
-    status: "online",
-    userId,
-  });
-
-  socket.emit("onlineUser", {
-    user: activeUsers,
-    status: "online",
-    userId,
-  });
-
-  socket.on("disconnect", async () => {
-    if (!activeUsers[userId]) return;
-
-    // Remove the user from the active users list
-    delete activeUsers[userId];
 
     // Broadcast the updated active users list to all connected clients
     socket.broadcast.emit("userStatus", {
       user: activeUsers,
-      status: "offline",
+      status: "online",
       userId,
     });
 
-    // Update the user's last_activity_time instead of deleting them
-    try {
-      await onlineUser.updateOne(
-        { trainer_id: userId },
-        { $set: { last_activity_time: Date.now() } },
-        { upsert: true } // Ensures the document exists or creates it
-      );
-    } catch (error) {
-      console.error("Error updating last_activity_time on disconnect:", error);
-    }
-  });
+    socket.emit("onlineUser", {
+      user: activeUsers,
+      status: "online",
+      userId,
+    });
 
-  // Listen for any event to update the user's last activity time
-  socket.on("userInteraction", () => {
-    if (activeUsers[userId]) {
-      activeUsers[userId].lastActivityTime = Date.now();
-    }
-  });
+    socket.on("disconnect", async () => {
+      if (!activeUsers[userId]) return;
+
+      // Remove the user from the active users list
+      delete activeUsers[userId];
+
+      // Broadcast the updated active users list to all connected clients
+      socket.broadcast.emit("userStatus", {
+        user: activeUsers,
+        status: "offline",
+        userId,
+      });
+
+      // Update the user's last_activity_time instead of deleting them
+      try {
+        await onlineUser.updateOne(
+          { trainer_id: userId },
+          { $set: { last_activity_time: Date.now() } },
+          { upsert: true } // Ensures the document exists or creates it
+        );
+      } catch (error) {
+        console.error("Error updating last_activity_time on disconnect:", error);
+      }
+    });
+
+    // Listen for any event to update the user's last activity time
+    socket.on("userInteraction", () => {
+      if (activeUsers[userId]) {
+        activeUsers[userId].lastActivityTime = Date.now();
+      }
+    });
+  } catch (error) {
+    console.log("error for online Users", error)
+  }
+
 }
 
 export const handleSocketEvents = (socket, connections = {}) => {
