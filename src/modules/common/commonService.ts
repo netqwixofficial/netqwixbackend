@@ -118,19 +118,6 @@ export class commonService {
       try {
         // Check if a user with this email already exists in the User collection
         const existingUser = await user.findOne<any>({ email: inviteEmail });
-        let emailBody = `
-        <div style="font-family: Verdana,Arial,Helvetica,sans-serif;font-size: 18px;line-height: 30px;">
-        Hello ${existingUser ? `<i style='color:#aebf76'>${existingUser.fullname}</i>,` : ''} 
-        <br/><br/>
-        ${referrerUser.fullname} has shared a video with you! 
-        <br/><br/>
-        Please <u style='color:#aebf76'><a href=${process.env.FRONTEND_URL}>${existingUser ? 'log in' : 'sign up'}</a></u> 
-        to check it out and connect with other NetQwix Team Members.
-        <br/><br/>
-        Team NetQwix. 
-        <br/>
-        <img src=${NetquixImage.logo} style="object-fit: contain; width: 180px;"/>
-        </div>`;
 
         if (existingUser) {
           // If the user exists, push their ID into userIds
@@ -155,17 +142,6 @@ export class commonService {
             const savedReferredUser = await referredUser.save();
             userIds.push(savedReferredUser._id);
           }
-        }
-
-        if (referrerUser._id !== existingUser._id) {
-          SendEmail.sendRawEmail(
-            null,
-            "",
-            [inviteEmail],
-            "Video Shared with You by " + referrerUser.fullname,
-            null,
-            emailBody
-          );
         }
 
       } catch (error) {
