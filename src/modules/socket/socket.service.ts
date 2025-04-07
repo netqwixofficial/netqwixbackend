@@ -45,10 +45,11 @@ async function updateUserActivity(socket) {
 
     if (socket?.user?._doc?.account_type === "Trainer") {
       activeUsers[userId] = { ...socket.user._doc };
-
+      console.log("typeof socket.user._doc._id:", typeof socket.user._doc._id);
+      console.log("socket.user._doc._id:", socket.user._doc._id);
       if (socket.user._doc._id) {
         const checkIfUserIsAlreadyAdded = await onlineUser.findOne({
-          trainer_id: new mongoose.Types.ObjectId(socket.user._doc._id),
+          trainer_id: socket.user._doc._id,
         });
 
         // console.log(
@@ -62,7 +63,7 @@ async function updateUserActivity(socket) {
             { $set: { last_activity_time: Date.now() } }
           );
         } else {
-          const createNewOnlineUser = new onlineUser({
+          const createNewOnlineUser = await new onlineUser({
             trainer_id: socket.user._doc._id,
             last_activity_time: Date.now(),
           }).save();
