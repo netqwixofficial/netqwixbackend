@@ -156,9 +156,10 @@ export class commonService {
 
   public async videoUploadUrl(req: any, res: Response) {
     try {
-
+      let isNewUser;
       if (req.body.invites && Array.isArray(req.body.invites)) {
         const userIds = await this.processInvites(req.body.invites, req.authUser);
+        isNewUser = userIds && userIds.length > 0
         req.body.user_id = [...(req?.body?.user_id ?? []), ...userIds];
       }
 
@@ -198,17 +199,33 @@ export class commonService {
             console.log(`User with ID ${id} not found`);
             continue;
           }
+          if(isNewUser){
+            console.log("NewUserMailSent")
+            SendEmail.sendRawEmail(
+              "clip-shared-new-user",
+              {
+                "[TRAINER/TRAINEE NAME]": req.authUser.fullname,
+                "[TRAINER/TRAINEE NAME2]": req.authUser.fullname,
+                "[PROFILE_PICTURE]": `https://data.netqwix.com/${clipObj.thumbnail}`
+              },
+              fetchUser.email,
+              `Your friend ${req.authUser.fullname} has uploaded a video in your NetQwix Locker!`,
+            );
+          }else{
+            console.log("OldUserMailSent")
 
-          SendEmail.sendRawEmail(
-            "clip-shared",
-            {
-              "[TRAINER/TRAINEE NAME]": req.authUser.fullname,
-              "[TRAINER/TRAINEE NAME2]": req.authUser.fullname,
-              "[PROFILE_PICTURE]": `https://data.netqwix.com/${clipObj.thumbnail}`
-            },
-            fetchUser.email,
-            `Your friend ${req.authUser.fullname} has uploaded a video in your NetQwix Locker!`,
-          );
+            SendEmail.sendRawEmail(
+              "clip-shared",
+              {
+                "[TRAINER/TRAINEE NAME]": req.authUser.fullname,
+                "[TRAINER/TRAINEE NAME2]": req.authUser.fullname,
+                "[PROFILE_PICTURE]": `https://data.netqwix.com/${clipObj.thumbnail}`
+              },
+              fetchUser.email,
+              `Your friend ${req.authUser.fullname} has uploaded a video in your NetQwix Locker!`,
+            );
+          }
+         
         }
 
         return res

@@ -157,7 +157,8 @@ export class AuthService {
         {
           "[TRAINER_NAME]": createUser.fullname,
           "[TRAINER_NAME2]": createUser.fullname,
-          "[ADMIN_URL]": process.env.BASE_URL + "/user/approve-expert/" + userObj._id
+          "[ADMIN_URL]": process.env.BASE_URL + "/user/approve-expert/" + userObj._id,
+          "[EMAIL_AND_NUMBER]":`${createUser.email}, ${createUser.mobile_no}.`
         },
         [adminEmail],
         `NetQwix New Expert Sign Up Request from ${createUser.fullname}`,
@@ -169,10 +170,11 @@ export class AuthService {
         "new-trainee",
         {
           "[TRAINER_NAME]": createUser.fullname,
-          "[TRAINER_NAME2]": createUser.fullname
+          "[TRAINER_NAME2]": createUser.fullname,
+           "[EMAIL_AND_NUMBER]":`${createUser.email}, ${createUser.mobile_no}.`
         },
         [adminEmail],
-        `NetQwix New Enthusiast Sign Up from ${createUser.fullname}`,
+        `NetQwix New Enthusiast - ${createUser.fullname}`,
       );
     }
 

@@ -107,7 +107,22 @@ export class UserService {
                 [traineeInfo.email],
                 `NetQwix Training Session is Confirmed`,
               );
-            } else {
+            }
+            else if (payload.booked_status === "canceled"){
+              SendEmail.sendRawEmail(
+                "session-confirmation",
+                {
+                  "[TRAINEE FIRST NAME]": traineeName.split(" ")[0],
+                  "[SESSION DURATION]": sessionDuration,
+                  "[TRAINER NAME]": trainerName,
+                  "[session date and time in trainee timezone]": trainerFormattedTime,
+                  // "[MEETING_LINK]": meetingLink
+                },
+                [traineeInfo.email],
+                `NetQwix Training Session is Cancelled`,
+              );
+            }
+            else {
               SendEmail.sendRawEmail(
                 null,
                 null,
@@ -133,6 +148,7 @@ export class UserService {
           }
           const meetingLink = process.env.FRONTEND_URL_SMS + "/meeting?id="
           console.log("meeting link", meetingLink + bookedSessionDetail._id)
+
           if (traineeInfo.notifications.transactional.sms) {
             await smsService.sendSMS(traineeInfo.mobile_no, " NetQwix Training Session has been confirmed you may start the lesson using this link " + meetingLink + bookedSessionDetail._id);
           }
@@ -169,11 +185,29 @@ export class UserService {
           await booked_session.findByIdAndUpdate(bookedSessionId, {
             refund_status: "refunded",
           });
+
+
+
+
           if (traineeInfo.notifications.transactional.sms) {
-            await smsService.sendSMS(traineeInfo.mobile_no, "session was cancelled. payment will be refunded back to source.");
+            const date = DateTime.fromJSDate(bookedSessionDetail.booked_date, { zone: "UTC" })
+            // Combine date with start time
+            const startDateTime = date.set({
+              hour: parseInt(bookedSessionDetail.session_start_time.split(":")[0], 10),
+              minute: parseInt(bookedSessionDetail.session_start_time.split(":")[1], 10)
+            });
+
+            // Combine date with end time
+            const endDateTime = date.set({
+              hour: parseInt(bookedSessionDetail.session_end_time.split(":")[0], 10),
+              minute: parseInt(bookedSessionDetail.session_end_time.split(":")[1], 10)
+            });
+            const formatted = `${startDateTime.toFormat("MMM d'th', yyyy 'at' hh:mm a")} To ${endDateTime.toFormat("hh:mm a")} ${timeZoneAbbreviations[bookedSessionDetail.time_zone] || bookedSessionDetail.time_zone}`;
+            await smsService.sendSMS(traineeInfo.mobile_no, `Your NetQwix session with ${formatted} was cancelled. Refund has been initiated.`);
           }
           if (trainerInfo.notifications.transactional.sms) {
-            await smsService.sendSMS(trainerInfo.mobile_no, "session cancelled." + bookedDate + " " + result.session_start_time + " " + result.session_end_time);
+
+            await smsService.sendSMS(trainerInfo.mobile_no, "Session cancelled." + bookedDate + " " + result.session_start_time + " " + result.session_end_time);
           }
 
         }
