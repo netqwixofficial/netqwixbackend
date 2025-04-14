@@ -111,8 +111,12 @@ export class commonService {
     }
   }
 
-  private async processInvites(invites: string[], referrerUser): Promise<string[]> {
-    const userIds: string[] = [];
+  private async processInvites(invites: string[], referrerUser): Promise<{
+    existingUserIds:string[],newUserIds:string[]
+  }> {
+    const existingUserIds: string[] = [];
+    const newUserIds: string[] = [];
+
 
     for (const inviteEmail of invites) {
       try {
@@ -121,7 +125,7 @@ export class commonService {
 
         if (existingUser) {
           // If the user exists, push their ID into userIds
-          userIds.push(existingUser._id);
+          existingUserIds.push(existingUser._id);
 
 
         } else {
@@ -130,7 +134,7 @@ export class commonService {
 
           if (existingReferredUser) {
             // If the referred user exists, push their ID into userIds
-            userIds.push(existingReferredUser._id);
+            newUserIds.push(existingReferredUser._id);
           } else {
             // If the user doesn't exist in both collections, create a new referred user
             const referredUser = new ReferredUser({
@@ -140,7 +144,7 @@ export class commonService {
 
             // Save the referred user and push their ID into userIds
             const savedReferredUser = await referredUser.save();
-            userIds.push(savedReferredUser._id);
+            newUserIds.push(savedReferredUser._id);
           }
         }
 
@@ -150,7 +154,7 @@ export class commonService {
       }
     }
 
-    return userIds;
+    return {existingUserIds,newUserIds};
   }
 
 
@@ -158,9 +162,12 @@ export class commonService {
     try {
       let isNewUser;
       if (req.body.invites && Array.isArray(req.body.invites)) {
-        const userIds = await this.processInvites(req.body.invites, req.authUser);
-        isNewUser = userIds && userIds.length > 0
-        req.body.user_id = [...(req?.body?.user_id ?? []), ...userIds];
+        const {existingUserIds,newUserIds} = await this.processInvites(req.body.invites, req.authUser);
+        console.log("newUserIds",newUserIds)
+        isNewUser = newUserIds && newUserIds.length > 0
+        req.body.user_id = [...(req?.body?.user_id ?? []), ...existingUserIds,...newUserIds];
+        console.log("isNewUser",isNewUser)
+        console.log("req.body.user_id",req.body.user_id)
       }
 
       var fileName =
@@ -194,12 +201,13 @@ export class commonService {
 
           clips.push(clipObj);
 
-          const fetchUser = await user.findById(id);
-          if (!fetchUser) {
-            console.log(`User with ID ${id} not found`);
-            continue;
-          }
+      
           if(isNewUser){
+            const fetchUser = await ReferredUser.findById(id)
+            if (!fetchUser) {
+              console.log(`User with ID ${id} not found`);
+              continue;
+            }
             console.log("NewUserMailSent")
             SendEmail.sendRawEmail(
               "clip-shared-new-user",
@@ -208,10 +216,15 @@ export class commonService {
                 "[TRAINER/TRAINEE NAME2]": req.authUser.fullname,
                 "[PROFILE_PICTURE]": `https://data.netqwix.com/${clipObj.thumbnail}`
               },
-              fetchUser.email,
+              [`${fetchUser.email}`],
               `Your friend ${req.authUser.fullname} has uploaded a video in your NetQwix Locker!`,
             );
           }else{
+            const fetchUser = await user.findById(id);
+            if (!fetchUser) {
+              console.log(`User with ID ${id} not found`);
+              continue;
+            }
             console.log("OldUserMailSent")
 
             SendEmail.sendRawEmail(
@@ -658,8 +671,8 @@ export class commonService {
         req.body.user_id = [req?.authUser?._id];
       }
       if (req.body.invites && Array.isArray(req.body.invites)) {
-        const userIds = await this.processInvites(req.body.invites, req.authUser);
-        req.body.user_id = [...req.body.user_id, ...userIds];
+        const {existingUserIds,newUserIds} = await this.processInvites(req.body.invites, req.authUser);
+        req.body.user_id = [...req.body.user_id, ...existingUserIds,...newUserIds];
       }
 
       if (!req?.body?.fileType || !req?.body?.thumbnail) {
