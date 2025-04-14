@@ -108,20 +108,7 @@ export class UserService {
                 `NetQwix Training Session is Confirmed`,
               );
             }
-            else if (payload.booked_status === "canceled"){
-              SendEmail.sendRawEmail(
-                "session-confirmation",
-                {
-                  "[TRAINEE FIRST NAME]": traineeName.split(" ")[0],
-                  "[SESSION DURATION]": sessionDuration,
-                  "[TRAINER NAME]": trainerName,
-                  "[session date and time in trainee timezone]": trainerFormattedTime,
-                  // "[MEETING_LINK]": meetingLink
-                },
-                [traineeInfo.email],
-                `NetQwix Training Session is Cancelled`,
-              );
-            }
+
             else {
               SendEmail.sendRawEmail(
                 null,
@@ -159,6 +146,7 @@ export class UserService {
 
 
 
+
         if (
           account_type === AccountType.TRAINER &&
           payload.booked_status === BOOKED_SESSIONS_STATUS.cancel
@@ -187,6 +175,30 @@ export class UserService {
           });
 
 
+          console.log("emailhai")
+          const traineeName = traineeInfo.fullname;
+          const trainerName = trainerInfo.fullname;
+          if (traineeInfo.notifications.transactional.email) {
+            console.log("emailhai1")
+            const startTime = DateTime.fromJSDate(result.start_time, { zone: 'utc' })
+            console.log("startTime", startTime)
+            console.log("startTime2", result.start_time)
+            const trainerFormattedTime = `${startTime.toFormat("EEEE, MMMM d'th' h:mm a")} ${timeZoneAbbreviations[result.time_zone] || result.time_zone}`
+           
+            SendEmail.sendRawEmail(
+              "session-cancellation",
+              {
+                "[TRAINEE FIRST NAME]": traineeName.split(" ")[0],
+                "[SESSION DURATION]": sessionDuration,
+                "[TRAINER NAME]": trainerName,
+                "[session date and time in trainee timezone]": trainerFormattedTime,
+                // "[MEETING_LINK]": meetingLink
+              },
+              [traineeInfo.email],
+              `NetQwix Training Session is Cancelled`,
+            );
+
+          }
 
 
           if (traineeInfo.notifications.transactional.sms) {

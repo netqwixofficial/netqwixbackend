@@ -21,6 +21,7 @@ export class Constant {
 }
 
 export const timeZoneAbbreviations = {
+  "Asia/Kolkata":"IST",
   "Asia/Calcutta": "IST",
   "America/New_York": "EST",
   "America/Los_Angeles": "PST",
