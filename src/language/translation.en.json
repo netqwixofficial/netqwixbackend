@@ -7,7 +7,7 @@
   "GOOGLE_LOGIN_REGISTER_PENDING": "Your account is not register yet, please complete registration",
   "TRAINEE_CREATED": "Trainee successfully created",
   "ERR_USER_PROFILE_EXIST": "User email {{EMAIL}} already exists, kindly choose another email address.",
-  "ERR_USER_PROFILE_NOT_EXIST": "User email {{EMAIL}} not exists, kindly choose another email address.",
+  "ERR_USER_PROFILE_NOT_EXIST": "{{EMAIL}} is not registered with NetQwix",
   "ERR_USER_DOESNT_EXIST": "User with email {{EMAIL}} doesn't exists",
   "INVALID_CREDENTIAL": "Email or password is incorrect. Please enter valid credentials",
   "LOGIN_SUCCESSFULL": "You have successfully logged in",
