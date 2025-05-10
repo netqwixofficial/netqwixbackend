@@ -356,50 +356,67 @@ export class userController {
 
   public sendFriendRequest = async (req, res) => {
     const { receiverId } = req.body;
-
     const senderId = req.authUser._id.toString();
+
     if (senderId === receiverId) {
       return res
         .status(400)
         .json({ error: "You cannot send a friend request to yourself." });
     }
-    console.log("senderId", senderId);
-    console.log("receiverId", receiverId);
 
     try {
-      const receiver = await user.findById(receiverId);
-      const sender = await user.findById(senderId);
+      const [receiver, sender] = await Promise.all([
+        user.findById(receiverId),
+        user.findById(senderId)
+      ]);
 
-      if (sender.isPrivate) {
-        return res.status(400).json({
-          error: "Your account is private,you cannot send a friend request.",
-        });
-      }
-      if (!receiver) {
+      if (!receiver || !sender) {
         return res.status(404).json({ error: "User not found." });
       }
 
-      // Check if a request already exists
-      const existingRequest = receiver.friendRequests.find(
-        (request) => request.senderId.toString() === senderId
-      );
+      if (sender.isPrivate) {
+        return res.status(400).json({
+          error: "Your account is private, you cannot send a friend request.",
+        });
+      }
 
+      // Check if already friends
+      const isAlreadyFriend = sender.friends.some(
+        friendId => friendId.toString() === receiverId
+      );
+      if (isAlreadyFriend) {
+        return res.status(400).json({ error: "You are already friends with this user." });
+      }
+
+      // Check for existing request in either direction
+      const existingRequest = receiver.friendRequests.find(
+        request => request.senderId.toString() === senderId
+      );
       if (existingRequest) {
         return res.status(400).json({ error: "Friend request already sent." });
       }
 
-      // Add friend request
-      receiver.friendRequests.push({ senderId, receiverId });
-      await receiver.save();
+      const pendingRequestFromReceiver = sender.friendRequests.find(
+        request => request.senderId.toString() === receiverId
+      );
+      if (pendingRequestFromReceiver) {
+        return res.status(400).json({
+          error: "This user has already sent you a friend request. Please accept that instead."
+        });
+      }
 
-      // Send emails to both the trainee and trainer
+      // Add friend request with duplicate check
+      if (!receiver.friendRequests.some(req => req.senderId.toString() === senderId)) {
+        receiver.friendRequests.push({ senderId, receiverId });
+        await receiver.save();
+      }
+
       SendEmail.sendRawEmail(
         "friend-request",
         {
           "[USER FULL NAME]": sender.fullname,
           "[TRAINER/TRAINEE NAME]": sender.fullname,
           "[USER_PROFILE_PIC]": `https://data.netqwix.com/${sender.profile_picture}`
-
         },
         [receiver.email],
         `NetQwix Friend Request from ${sender.fullname}`,
@@ -423,31 +440,42 @@ export class userController {
 
       if (userDoc.isPrivate) {
         return res.status(400).json({
-          error: "Your account is private,you cannot send a friend request.",
+          error: "Your account is private, you cannot accept friend requests.",
         });
       }
 
-      // Find the request
       const requestIndex = userDoc.friendRequests.findIndex(
-        (request) => request._id.toString() === requestId
+        request => request._id.toString() === requestId
       );
-
       if (requestIndex === -1) {
         return res.status(400).json({ error: "Friend request not found." });
       }
 
       const senderId = userDoc.friendRequests[requestIndex].senderId;
 
-      // Add each other as friends
-      userDoc.friends.push(senderId);
-      const senderDoc = await user.findById(senderId);
-      senderDoc.friends.push(userId);
+      // Check if already friends
+      const isAlreadyFriend = userDoc.friends.some(
+        friendId => friendId.toString() === senderId.toString()
+      );
+      if (isAlreadyFriend) {
+        userDoc.friendRequests.splice(requestIndex, 1);
+        await userDoc.save();
+        return res.status(400).json({ error: "You are already friends with this user." });
+      }
 
-      // Remove the friend request
+      // Add friends with duplicate checks
+      if (!userDoc.friends.includes(senderId)) {
+        userDoc.friends.push(senderId);
+      }
+      const senderDoc = await user.findById(senderId);
+      if (!senderDoc.friends.includes(userId)) {
+        senderDoc.friends.push(userId);
+      }
+
+      // Remove the request
       userDoc.friendRequests.splice(requestIndex, 1);
 
-      await userDoc.save();
-      await senderDoc.save();
+      await Promise.all([userDoc.save(), senderDoc.save()]);
 
       res.status(200).json({ message: "Friend request accepted." });
     } catch (error) {
@@ -466,22 +494,18 @@ export class userController {
         return res.status(404).json({ error: "User not found." });
       }
 
-      // Find the request
       const requestIndex = receiver.friendRequests.findIndex(
-        (request) => request.senderId.toString() === senderId
+        request => request.senderId.toString() === senderId
       );
 
       if (requestIndex === -1) {
         return res.status(400).json({ error: "Friend request not found." });
       }
 
-      // Remove the request
       receiver.friendRequests.splice(requestIndex, 1);
       await receiver.save();
 
-      res
-        .status(200)
-        .json({ message: "Friend request canceled successfully." });
+      res.status(200).json({ message: "Friend request canceled successfully." });
     } catch (error) {
       console.error(error);
       res.status(500).json({ error: "Server error." });
@@ -491,22 +515,21 @@ export class userController {
   public rejectFriendRequest = async (req, res) => {
     const { requestId } = req.body;
     const userId = req.authUser._id;
+
     try {
       const userDoc = await user.findById(userId);
       if (!userDoc) {
         return res.status(404).json({ error: "User not found." });
       }
 
-      // Find the request
       const requestIndex = userDoc.friendRequests.findIndex(
-        (request) => request._id.toString() === requestId
+        request => request._id.toString() === requestId
       );
 
       if (requestIndex === -1) {
         return res.status(400).json({ error: "Friend request not found." });
       }
 
-      // Remove the request
       userDoc.friendRequests.splice(requestIndex, 1);
       await userDoc.save();
 
@@ -534,7 +557,22 @@ export class userController {
         return res.status(404).json({ error: "User not found." });
       }
 
-      res.status(200).json({ friendRequests: tempUser.friendRequests });
+      // Deduplicate friend requests
+      const uniqueRequests = tempUser.friendRequests.filter(
+        (request, index, self) =>
+          index === self.findIndex(
+            r => r.senderId._id.toString() === request.senderId._id.toString() &&
+              r.receiverId._id.toString() === request.receiverId._id.toString()
+          )
+      );
+
+      // Update if duplicates were found
+      if (uniqueRequests.length !== tempUser.friendRequests.length) {
+        tempUser.friendRequests = uniqueRequests;
+        await tempUser.save();
+      }
+
+      res.status(200).json({ friendRequests: uniqueRequests });
     } catch (error) {
       console.error(error);
       res.status(500).json({ error: "Server error." });
@@ -544,30 +582,26 @@ export class userController {
   public removeFriend = async (req, res) => {
     const { friendId } = req.body;
     const userId = req.authUser._id;
+
     try {
-      const userDoc = await user.findById(userId);
-      const friendDoc = await user.findById(friendId);
-      console.log("userDoc", userId);
-      console.log("friendDoc", friendId);
+      const [userDoc, friendDoc] = await Promise.all([
+        user.findById(userId),
+        user.findById(friendId)
+      ]);
 
       if (!userDoc || !friendDoc) {
         return res.status(404).json({ error: "User not found." });
       }
 
-      // Remove friend from user's friend list
+      // Remove friend with proper filtering
       userDoc.friends = userDoc.friends.filter(
-        (friend) => friend.toString() !== friendId
+        friend => friend.toString() !== friendId
       );
-
-      // Remove user from friend's friend list
       friendDoc.friends = friendDoc.friends.filter(
-        (friend) => friend.toString() !== userId.toString()
+        friend => friend.toString() !== userId.toString()
       );
-      console.log("userDoc", userDoc.friends);
-      console.log("friendDoc", friendDoc.friends);
 
-      await userDoc.save();
-      await friendDoc.save();
+      await Promise.all([userDoc.save(), friendDoc.save()]);
 
       res.status(200).json({ message: "Friend removed successfully." });
     } catch (error) {
@@ -587,7 +621,19 @@ export class userController {
         return res.status(404).json({ error: "User not found." });
       }
 
-      res.status(200).json({ friends: userDoc.friends });
+      // Deduplicate friends list
+      const uniqueFriends = userDoc.friends.filter(
+        (friend, index, self) =>
+          index === self.findIndex(f => f._id.toString() === friend._id.toString())
+      );
+
+      // Update if duplicates were found
+      if (uniqueFriends.length !== userDoc.friends.length) {
+        userDoc.friends = uniqueFriends.map(f => f._id);
+        await userDoc.save();
+      }
+
+      res.status(200).json({ friends: uniqueFriends });
     } catch (error) {
       console.error(error);
       res.status(500).json({ error: "Server error." });
@@ -908,19 +954,19 @@ export class userController {
 
   public approveTrainer = async (req, res) => {
     try {
-        const { id } = req.params;
-        const htmlResponse = await this.userService.approveTrainer(id);
-        
-        // Set content type to HTML
-        res.setHeader('Content-Type', 'text/html');
-        res.send(htmlResponse);
+      const { id } = req.params;
+      const htmlResponse = await this.userService.approveTrainer(id);
+
+      // Set content type to HTML
+      res.setHeader('Content-Type', 'text/html');
+      res.send(htmlResponse);
     } catch (err) {
-        const errorHtml = this.userService.getErrorHtml(
-            "Server Error", 
-            "An unexpected error occurred. Please try again later."
-        );
-        res.setHeader('Content-Type', 'text/html');
-        res.status(500).send(errorHtml);
+      const errorHtml = this.userService.getErrorHtml(
+        "Server Error",
+        "An unexpected error occurred. Please try again later."
+      );
+      res.setHeader('Content-Type', 'text/html');
+      res.status(500).send(errorHtml);
     }
-};
+  };
 }

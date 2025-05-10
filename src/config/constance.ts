@@ -83,6 +83,7 @@ export class EVENTS {
   public static readonly EMIT_UNDO = "EMIT_UNDO";
   public static readonly ON_UNDO = "ON_UNDO";
   public static readonly ON_VIDEO_SELECT = "ON_VIDEO_SELECT";
+  public static readonly CALL_END = "CALL_END";
   public static readonly ON_VIDEO_SHOW = "ON_VIDEO_SHOW";
   public static readonly TOGGLE_DRAWING_MODE = "TOGGLE_DRAWING_MODE";
   public static readonly TOGGLE_FULL_SCREEN = "TOGGLE_FULL_SCREEN";

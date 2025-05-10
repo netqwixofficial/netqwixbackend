@@ -225,6 +225,7 @@ export const handleSocketEvents = (socket, connections = {}) => {
   listenDrawEvent(socket);
   stopDrawEvent(socket);
   listenShowVideoEvent(socket);
+  listenCallEndEvent(socket);
   listenVideoPositionEvent(socket)
   listenPlayPauseVideoEvent(socket);
   listenVideoTimeEvent(socket);
@@ -232,7 +233,6 @@ export const handleSocketEvents = (socket, connections = {}) => {
   listenDrawingModeToggle(socket);
   listenFullscreenToggle(socket);
   listenLockModeToggle(socket);
-
   listenVideoChunksEvent(socket);
   listenNotificationEvents(socket);
 };
@@ -421,6 +421,22 @@ const listenShowVideoEvent = (socket) => {
     });
   } catch (err) {
     console.log(`while listen draw event `, err);
+    throw err;
+  }
+};
+
+const listenCallEndEvent = (socket) => {
+  try {
+    socket.on(EVENTS.CALL_END, async (socketReq, request) => {
+      const { userInfo } = socketReq;
+      const toUserSocketId = MemCache.getDetail(
+        process.env.SOCKET_CONFIG,
+        userInfo?.to_user
+      );
+      socket.to(toUserSocketId).emit(EVENTS.CALL_END, socketReq);
+    });
+  } catch (err) {
+    console.log(`while listen call end event `, err);
     throw err;
   }
 };
