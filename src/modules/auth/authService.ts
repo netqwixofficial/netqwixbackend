@@ -103,7 +103,7 @@ export class AuthService {
 
     // Create the user object, but replace its _id if referredUser exists
     const userObj = referredUser
-      ? new user({ ...updateduserObj, _id: referredUser._id }) // Use referred user's _id
+      ? new user({ ...updateduserObj, _id: referredUser._id,friends:[referredUser.referrerId] }) // Use referred user's _id
       : new user(updateduserObj); // Create a new user normally
 
 
@@ -111,8 +111,12 @@ export class AuthService {
 
 
 
+
     // Remove the referred user from the ReferredUser collection if it was created from there
     if (referredUser) {
+      const rUser = await user.findById(referredUser.referrerId);
+      rUser.friends = [referredUser._id];
+      await rUser.save();
       await ReferredUser.deleteOne({ _id: referredUser._id });
     }
 

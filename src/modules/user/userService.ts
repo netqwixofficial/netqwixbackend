@@ -26,6 +26,7 @@ import onlineUser from "../../model/online_user.schema";
 import SMSService from "../../services/sms-service";
 import user from "../../model/user.schema";
 import { DateTime } from "luxon";
+import ReferredUser from "../../model/referred.user.schema";
 const stripe = require("stripe")(process.env.STRIPE_SECRET);
 
 export class UserService {
@@ -321,6 +322,17 @@ export class UserService {
         //   userInfo._doc.account_type === AccountType.TRAINER
         //     ? "refer-expert"
         //     : "refer-trainee";
+        const existingReferredUser = await ReferredUser.findOne<any>({ email: userInfo?.user_email });
+        if(!existingReferredUser){
+          const referredUser = new ReferredUser({
+            email: userInfo?.user_email,
+            referrerId: userInfo._doc._id,
+          });
+  
+  
+          await referredUser.save();
+        }
+
         if (userInfo._doc.notifications.promotional.email) {
           if (userInfo._doc.account_type === AccountType.TRAINER) {
             SendEmail.sendRawEmail(
