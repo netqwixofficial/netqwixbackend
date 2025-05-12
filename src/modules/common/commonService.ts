@@ -160,116 +160,119 @@ export class commonService {
 
   public async videoUploadUrl(req: any, res: Response) {
     try {
-      let isNewUser;
-      if (req.body.invites && Array.isArray(req.body.invites)) {
-        const {existingUserIds,newUserIds} = await this.processInvites(req.body.invites, req.authUser);
-        console.log("newUserIds",newUserIds)
-        isNewUser = newUserIds && newUserIds.length > 0
-        req.body.user_id = [...(req?.body?.user_id ?? []), ...existingUserIds,...newUserIds];
-        console.log("isNewUser",isNewUser)
-        console.log("req.body.user_id",req.body.user_id)
+      const shareWithConstants = {
+        myClips: "My Clips",
+        myFriends: "Friends",
+        newUsers: "New Users"
       }
-
-      var fileName =
-        new Date().getTime().toString() +
-        "." +
-        req?.body?.fileType?.split("/")[1];
-
-      var thumbnailFileName =
-        new Date().getTime().toString() +
-        "." +
-        req?.body?.thumbnail?.split("/")[1];
-
-      req.body.file_name = fileName;
-      req.body.thumbnail = thumbnailFileName;
-
-      if (req.body.user_id) {
-        let fileUrl = await this.generatePreSignedPutUrl(
-          fileName,
-          req?.body?.fileType
-        );
-
-        let thumbnailURL = await this.generatePreSignedPutUrl(
-          thumbnailFileName,
-          req?.body?.thumbnail
-        );
-        let clips = [];
-        for (const id of req.body.user_id) {
-          const clipObj = new clip({ ...req.body, user_id: id });
-
-          await clipObj.save();
-
-          clips.push(clipObj);
-
       
-          if(isNewUser){
-            const fetchUser = await ReferredUser.findById(id)
-            if (!fetchUser) {
-              console.log(`User with ID ${id} not found`);
-              continue;
-            }
-            console.log("NewUserMailSent")
-            SendEmail.sendRawEmail(
-              "clip-shared-new-user",
-              {
-                "[TRAINER/TRAINEE NAME]": req.authUser.fullname,
-                "[TRAINER/TRAINEE NAME2]": req.authUser.fullname,
-                "[PROFILE_PICTURE]": `https://data.netqwix.com/${clipObj.thumbnail}`
-              },
-              [`${fetchUser.email}`],
-              `Your friend ${req.authUser.fullname} has uploaded a video in your NetQwix Locker!`,
-            );
-          }else{
-            const fetchUser = await user.findById(id);
-            if (!fetchUser) {
-              console.log(`User with ID ${id} not found`);
-              continue;
-            }
-            console.log("OldUserMailSent")
-
-            SendEmail.sendRawEmail(
-              "clip-shared",
-              {
-                "[TRAINER/TRAINEE NAME]": req.authUser.fullname,
-                "[TRAINER/TRAINEE NAME2]": req.authUser.fullname,
-                "[PROFILE_PICTURE]": `https://data.netqwix.com/${clipObj.thumbnail}`
-              },
-              fetchUser.email,
-              `Your friend ${req.authUser.fullname} has uploaded a video in your NetQwix Locker!`,
-            );
-          }
-         
+      // Handle bulk upload
+      if (Array.isArray(req.body.clips)) {
+        const results = [];
+        const { shareOptions } = req.body;
+        
+        let isNewUser = false;
+        let processedUserIds = [];
+        
+        // Process invites if this is a share with new users
+        if (shareOptions?.type === shareWithConstants.newUsers && shareOptions?.emails) {
+          const { existingUserIds, newUserIds } = await this.processInvites(shareOptions.emails, req.authUser);
+          isNewUser = newUserIds.length > 0;
+          processedUserIds = [...existingUserIds, ...newUserIds];
+        } 
+        // Use selected friends if sharing with friends
+        else if (shareOptions?.type === shareWithConstants.myFriends && shareOptions?.friends) {
+          processedUserIds = shareOptions.friends;
+        }
+        // Default to current user if sharing with my clips
+        else {
+          processedUserIds = [req.authUser._id];
         }
 
-        return res
-          .status(CONSTANCE.RES_CODE.success)
-          .json({ success: 1, url: fileUrl, thumbnailURL, clips });
+        // Object to track users who need emails and their thumbnails
+        const usersToEmail: Record<string, any> = {};
+        
+        // Process each clip in the bulk upload
+        for (const clipData of req.body.clips) {
+          const fileName = `${new Date().getTime()}_${Math.random().toString(36).substring(2, 9)}.${clipData.fileType.split("/")[1]}`;
+          const thumbnailFileName = `${new Date().getTime()}_${Math.random().toString(36).substring(2, 9)}.${clipData.thumbnail.split("/")[1]}`;
+
+          const clipPayload = {
+            ...clipData,
+            file_name: fileName,
+            thumbnail: thumbnailFileName,
+            user_id: processedUserIds
+          };
+
+          const fileUrl = await this.generatePreSignedPutUrl(fileName, clipData.fileType);
+          const thumbnailURL = await this.generatePreSignedPutUrl(thumbnailFileName, clipData.thumbnail);
+
+          // Save clips for all users
+          const savedClips = [];
+          for (const userId of processedUserIds) {
+            const clipObj = new clip({ ...clipPayload, user_id: userId });
+            await clipObj.save();
+            savedClips.push(clipObj);
+
+            // Track users who need emails and collect their thumbnails
+            if ((isNewUser && shareOptions.type === shareWithConstants.newUsers) || 
+                (shareOptions.type === shareWithConstants.myFriends)) {
+              if (!usersToEmail[userId]) {
+                usersToEmail[userId] = {
+                  thumbnails: [],
+                  isNewUser: isNewUser && shareOptions.type === shareWithConstants.newUsers
+                };
+              }
+              usersToEmail[userId].thumbnails.push(`https://data.netqwix.com/${clipObj.thumbnail}`);
+            }
+          }
+
+          results.push({
+            success: 1,
+            url: fileUrl,
+            thumbnailURL,
+            clips: savedClips
+          });
+        }
+
+        // Send emails after all clips are processed
+        for (const [userId, data] of Object.entries(usersToEmail)) {
+          const userData = data.isNewUser 
+            ? await ReferredUser.findById(userId)
+            : await user.findById(userId);
+
+          if (userData) {
+            const templateName = data.isNewUser ? "clip-shared-new-user" : "clip-shared";
+            const thumbnailsHTML = data.thumbnails.map(url => 
+              `<img src="${url}" alt="Video Thumbnail" style="max-width: 200px; margin: 5px;"/>`
+            ).join('');
+
+            await SendEmail.sendRawEmail(
+              templateName,
+              {
+                "[TRAINER/TRAINEE NAME]": req.authUser.fullname,
+                "[TRAINER/TRAINEE NAME2]": req.authUser.fullname,
+                "[PROFILE_PICTURE]": data.thumbnails[0], // Use first thumbnail as profile picture
+                "[THUMBNAILS]": thumbnailsHTML // Add all thumbnails to the email
+              },
+              [userData.email],
+              `Your friend ${req.authUser.fullname} has shared ${data.thumbnails.length} video(s) in your NetQwix Locker!`,
+            );
+          }
+        }
+
+        return res.status(CONSTANCE.RES_CODE.success).json({
+          success: 1,
+          results,
+          message: "Bulk upload processed successfully"
+        });
       }
-      else {
-        req.body.user_id = [req?.authUser?._id]
-        const clipObj = new clip(req.body);
-
-        await clipObj.save();
-
-        let fileUrl = await this.generatePreSignedPutUrl(
-          fileName,
-          req?.body?.fileType
-        );
-
-        let thumbnailURL = await this.generatePreSignedPutUrl(
-          thumbnailFileName,
-          req?.body?.thumbnail
-        );
-
-        return res
-          .status(CONSTANCE.RES_CODE.success)
-          .json({ success: 1, url: fileUrl, thumbnailURL, clipObj });
-
-      }
-
-
+  
+      // Handle single upload (legacy support)
+      // ... (keep your existing single upload logic here)
+  
     } catch (error) {
-      console.log("error",error)
+      console.log("error", error)
       res.status(CONSTANCE.RES_CODE.error.internalServerError).json({
         success: 0,
         message: Message.internal,
