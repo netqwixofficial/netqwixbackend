@@ -636,25 +636,22 @@
                                                   color: #333333;
                                                   font-size: 14px;
                                                 "></p>
-                                            <div class="b" style="
-                                                  font-family: arial,
-                                                    'helvetica neue', helvetica,
-                                                    sans-serif;
-                                                  font-size: 19px;
-                                                ">
+                                           <!-- Similar changes in the new user template -->
+                                            <div class="b" style="font-family: arial, 'helvetica neue', helvetica, sans-serif; font-size: 19px;">
                                               <div>
                                                 <br />
                                                 <div>
-                                                  [TRAINER/TRAINEE NAME2] has
-                                                  placed a video in your
-                                                  Locker.
+                                                  [TRAINER/TRAINEE NAME2] has [VIDEO_COUNT_MESSAGE].
                                                 </div>
-                                                <!-- Thumbnails section -->
-                                                <div style="text-align: center; margin: 20px 0;">
+                                                <!-- Single video section -->
+                                                <div style="text-align: center; margin: 20px 0; [DISPLAY_SINGLE]">
+                                                  <img src="[THUMBNAILS]" alt="Video Thumbnail" style="max-width: 400px; margin: 0 auto; border: 1px solid #ddd; border-radius: 4px;"/>
+                                                </div>
+                                                <!-- Multiple videos section -->
+                                                <div style="text-align: center; margin: 20px 0; [DISPLAY_MULTIPLE]">
                                                   <h3 style="margin-bottom: 15px;">Shared Videos:</h3>
-                                                  <div
-                                                    style="display: flex; flex-wrap: wrap; justify-content: center; gap: 15px;">
-                                                    [THUMBNAILS]
+                                                  <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px; max-width: 500px; margin: 0 auto;">
+                                                    [THUMBNAILS_GRID]
                                                   </div>
                                                 </div>
                                                 <br /><br />

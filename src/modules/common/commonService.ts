@@ -112,7 +112,7 @@ export class commonService {
   }
 
   private async processInvites(invites: string[], referrerUser): Promise<{
-    existingUserIds:string[],newUserIds:string[]
+    existingUserIds: string[], newUserIds: string[]
   }> {
     const existingUserIds: string[] = [];
     const newUserIds: string[] = [];
@@ -154,7 +154,7 @@ export class commonService {
       }
     }
 
-    return {existingUserIds,newUserIds};
+    return { existingUserIds, newUserIds };
   }
 
 
@@ -165,21 +165,21 @@ export class commonService {
         myFriends: "Friends",
         newUsers: "New Users"
       }
-      
+
       // Handle bulk upload
       if (Array.isArray(req.body.clips)) {
         const results = [];
         const { shareOptions } = req.body;
-        
+
         let isNewUser = false;
         let processedUserIds = [];
-        
+
         // Process invites if this is a share with new users
         if (shareOptions?.type === shareWithConstants.newUsers && shareOptions?.emails) {
           const { existingUserIds, newUserIds } = await this.processInvites(shareOptions.emails, req.authUser);
           isNewUser = newUserIds.length > 0;
           processedUserIds = [...existingUserIds, ...newUserIds];
-        } 
+        }
         // Use selected friends if sharing with friends
         else if (shareOptions?.type === shareWithConstants.myFriends && shareOptions?.friends) {
           processedUserIds = shareOptions.friends;
@@ -191,7 +191,7 @@ export class commonService {
 
         // Object to track users who need emails and their thumbnails
         const usersToEmail: Record<string, any> = {};
-        
+
         // Process each clip in the bulk upload
         for (const clipData of req.body.clips) {
           const fileName = `${new Date().getTime()}_${Math.random().toString(36).substring(2, 9)}.${clipData.fileType.split("/")[1]}`;
@@ -215,8 +215,8 @@ export class commonService {
             savedClips.push(clipObj);
 
             // Track users who need emails and collect their thumbnails
-            if ((isNewUser && shareOptions.type === shareWithConstants.newUsers) || 
-                (shareOptions.type === shareWithConstants.myFriends)) {
+            if ((isNewUser && shareOptions.type === shareWithConstants.newUsers) ||
+              (shareOptions.type === shareWithConstants.myFriends)) {
               if (!usersToEmail[userId]) {
                 usersToEmail[userId] = {
                   thumbnails: [],
@@ -237,23 +237,46 @@ export class commonService {
 
         // Send emails after all clips are processed
         for (const [userId, data] of Object.entries(usersToEmail)) {
-          const userData = data.isNewUser 
+          const userData = data.isNewUser
             ? await ReferredUser.findById(userId)
             : await user.findById(userId);
 
           if (userData) {
             const templateName = data.isNewUser ? "clip-shared-new-user" : "clip-shared";
-            const thumbnailsHTML = data.thumbnails.map(url => 
-              `<img src="${url}" alt="Video Thumbnail" style="max-width: 200px; margin: 5px;"/>`
-            ).join('');
+            const isSingleVideo = data.thumbnails.length === 1;
+            const videoCount = data.thumbnails.length;
+
+            // Prepare the dynamic message based on video count
+            let videoCountMessage = videoCount === 1
+              ? 'placed a video in your Locker'
+              : `placed ${videoCount} videos in your Locker`;
+            // Prepare thumbnail HTML based on count
+            let thumbnailsHTML = '';
+            let displaySingle = isSingleVideo ? 'display: block;' : 'display: none;';
+            let displayMultiple = !isSingleVideo ? 'display: block;' : 'display: none;';
+
+            if (isSingleVideo) {
+              thumbnailsHTML = data.thumbnails[0]; // Just the URL for single image
+            } else {
+              // Create grid of thumbnails for multiple videos
+              thumbnailsHTML = data.thumbnails.map(url =>
+                `<img src="${url}" alt="Video Thumbnail" style="width: 100%; max-width: 200px; border: 1px solid #ddd; border-radius: 4px;"/>`
+              ).join('');
+            }
+
+
 
             await SendEmail.sendRawEmail(
               templateName,
               {
                 "[TRAINER/TRAINEE NAME]": req.authUser.fullname,
                 "[TRAINER/TRAINEE NAME2]": req.authUser.fullname,
-                "[PROFILE_PICTURE]": data.thumbnails[0], // Use first thumbnail as profile picture
-                "[THUMBNAILS]": thumbnailsHTML // Add all thumbnails to the email
+                "[PROFILE_PICTURE]": data.thumbnails[0],
+                "[THUMBNAILS]": thumbnailsHTML,
+                "[THUMBNAILS_GRID]": thumbnailsHTML,
+                "[DISPLAY_SINGLE]": displaySingle,
+                "[DISPLAY_MULTIPLE]": displayMultiple,
+                "[VIDEO_COUNT_MESSAGE]": videoCountMessage,
               },
               [userData.email],
               `Your friend ${req.authUser.fullname} has shared ${data.thumbnails.length} video(s) in your NetQwix Locker!`,
@@ -267,10 +290,10 @@ export class commonService {
           message: "Bulk upload processed successfully"
         });
       }
-  
+
       // Handle single upload (legacy support)
       // ... (keep your existing single upload logic here)
-  
+
     } catch (error) {
       console.log("error", error)
       res.status(CONSTANCE.RES_CODE.error.internalServerError).json({
@@ -674,8 +697,8 @@ export class commonService {
         req.body.user_id = [req?.authUser?._id];
       }
       if (req.body.invites && Array.isArray(req.body.invites)) {
-        const {existingUserIds,newUserIds} = await this.processInvites(req.body.invites, req.authUser);
-        req.body.user_id = [...req.body.user_id, ...existingUserIds,...newUserIds];
+        const { existingUserIds, newUserIds } = await this.processInvites(req.body.invites, req.authUser);
+        req.body.user_id = [...req.body.user_id, ...existingUserIds, ...newUserIds];
       }
 
       if (!req?.body?.fileType || !req?.body?.thumbnail) {

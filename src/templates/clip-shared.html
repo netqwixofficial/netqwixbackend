@@ -631,30 +631,29 @@
                                                   color: #333333;
                                                   font-size: 14px;
                                                 "></p>
-                                            <div class="b" style="
-                                                  font-family: arial,
-                                                    'helvetica neue', helvetica,
-                                                    sans-serif;
-                                                  font-size: 19px;
-                                                ">
-                                              <div>
-                                                <br />
-                                                <div>
-                                                  [TRAINER/TRAINEE NAME2] has
-                                                  placed a video in your
-                                                  Locker.
-                                                </div>
-                                                <!-- Thumbnails section -->
-                                                <div style="text-align: center; margin: 20px 0;">
-                                                  <h3 style="margin-bottom: 15px;">Shared Videos:</h3>
-                                                  <div
-                                                    style="display: flex; flex-wrap: wrap; justify-content: center; gap: 15px;">
-                                                    [THUMBNAILS]
-                                                  </div>
-                                                </div>
-                                                <br /><br />
-                                              </div>
-                                            </div>
+                                        <!-- In the body section, replace the thumbnails part with this: -->
+<div class="b" style="font-family: arial, 'helvetica neue', helvetica, sans-serif; font-size: 19px;">
+  <div>
+    <br />
+    <div>
+      [TRAINER/TRAINEE NAME2] has [VIDEO_COUNT_MESSAGE].
+    </div>
+    <!-- Single video section (shown when only one thumbnail exists) -->
+    <div style="text-align: center; margin: 20px 0; [DISPLAY_SINGLE]">
+      <img src="[THUMBNAILS]" alt="Video Thumbnail" style="max-width: 400px; margin: 0 auto; border: 1px solid #ddd; border-radius: 4px;"/>
+    </div>
+    <!-- Multiple videos section (shown when more than one thumbnail exists) -->
+    <div style="text-align: center; margin: 20px 0; [DISPLAY_MULTIPLE]">
+      <h3 style="margin-bottom: 15px;">Shared Videos:</h3>
+      <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px; max-width: 500px; margin: 0 auto;">
+        [THUMBNAILS_GRID]
+      </div>
+    </div>
+    <br /><br />
+  </div>
+</div>
+
+
                                             <div class="b" style="
                                                   font-family: arial,
                                                     'helvetica neue', helvetica,
