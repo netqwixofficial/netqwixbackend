@@ -189,8 +189,8 @@ export class commonService {
           processedUserIds = [req.authUser._id];
         }
 
-        // Object to track users who need emails and their thumbnails
-        const usersToEmail: Record<string, any> = {};
+        // Object to track users who need emails and their thumbnails with titles
+        const usersToEmail: Record<string, { thumbnails: { url: string, title: string }[], isNewUser: boolean }> = {};
 
         // Process each clip in the bulk upload
         for (const clipData of req.body.clips) {
@@ -203,7 +203,7 @@ export class commonService {
             thumbnail: thumbnailFileName,
             user_id: processedUserIds
           };
-
+          console.log("fileName", fileName)
           const fileUrl = await this.generatePreSignedPutUrl(fileName, clipData.fileType);
           const thumbnailURL = await this.generatePreSignedPutUrl(thumbnailFileName, clipData.thumbnail);
 
@@ -223,7 +223,10 @@ export class commonService {
                   isNewUser: isNewUser && shareOptions.type === shareWithConstants.newUsers
                 };
               }
-              usersToEmail[userId].thumbnails.push(`https://data.netqwix.com/${clipObj.thumbnail}`);
+              usersToEmail[userId].thumbnails.push({
+                url: `https://data.netqwix.com/${clipObj.thumbnail}`,
+                title: clipObj.title || 'Untitled Video'
+              });
             }
           }
 
@@ -251,20 +254,47 @@ export class commonService {
               ? 'placed a video in your Locker'
               : `placed ${videoCount} videos in your Locker`;
             // Prepare thumbnail HTML based on count
+            // Prepare thumbnail HTML based on count
             let thumbnailsHTML = '';
-            let displaySingle = isSingleVideo ? 'display: block;' : 'display: none;';
-            let displayMultiple = !isSingleVideo ? 'display: block;' : 'display: none;';
+            let thumbnailsGridHTML = '';
 
             if (isSingleVideo) {
-              thumbnailsHTML = data.thumbnails[0]; // Just the URL for single image
+              const video = data.thumbnails[0];
+              thumbnailsHTML = video.url; // Just the URL for single image
+              thumbnailsGridHTML = `
+                            <img src="${video.url}" alt="Video Thumbnail" style="width:100%; max-width: 200px; border: 1px solid #ddd; border-radius: 4px;"/>
+                            <div style="margin-top: 5px; font-size: 14px; font-weight: bold;">${video.title}</div>
+                          `;
             } else {
-              // Create grid of thumbnails for multiple videos
-              thumbnailsHTML = data.thumbnails.map(url =>
-                `<img src="${url}" alt="Video Thumbnail" style="width: 100%; max-width: 200px; border: 1px solid #ddd; border-radius: 4px;"/>`
-              ).join('');
+              // Create grid of thumbnails for multiple videos with titles
+              thumbnailsGridHTML = data.thumbnails.map((video, index) => `
+                               <td style="padding: 7px; vertical-align: top; width: 50%;">
+                              <img src="${video.url}" alt="Video Thumbnail" style="width:100%; max-width: 200px; border: 1px solid #ddd; border-radius: 4px;"/>
+                              <div style="margin-top: 5px; font-size: 14px; font-weight: bold;">${video.title}</div>
+                            </td>
+                              ${(index + 1) % 2 === 0 ? '</tr><tr>' : ''}
+                          `).join('');
             }
 
+            const displaySingle = data.thumbnails.length === 1 ? `
+                          <div style="text-align: center; margin: 20px 0;">
+                            ${thumbnailsGridHTML}
+                          
+                          </div>
+                          <div>
+                            ${req.authUser.fullname} has ${videoCountMessage}.
+                          </div>
+                        ` : '';
 
+            const displayMultiple = data.thumbnails.length > 1 ? `
+                          <div style="text-align: center; margin: 20px 0;">
+                            <h3 style="margin-bottom: 15px;">Shared Videos:</h3>
+                            <table role="presentation" cellspacing="0" cellpadding="0" border="0" align="center" style="max-width: 500px; margin: 0 auto;">
+  <tr>
+                              ${thumbnailsGridHTML}
+                             </tr>
+</table>
+                        ` : '';
 
             await SendEmail.sendRawEmail(
               templateName,
@@ -276,7 +306,6 @@ export class commonService {
                 "[THUMBNAILS_GRID]": thumbnailsHTML,
                 "[DISPLAY_SINGLE]": displaySingle,
                 "[DISPLAY_MULTIPLE]": displayMultiple,
-                "[VIDEO_COUNT_MESSAGE]": videoCountMessage,
               },
               [userData.email],
               `Your friend ${req.authUser.fullname} has shared ${data.thumbnails.length} video(s) in your NetQwix Locker!`,
