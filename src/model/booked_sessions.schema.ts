@@ -78,6 +78,10 @@ const bookedSessionsSchema: Schema = new Schema(
         iceServers: {
             type: Schema.Types.Array,
             default: [],              
+        },
+        extended_session_end_time:{
+            type: String,
+            default: null,
         }
     },
     { timestamps: true }

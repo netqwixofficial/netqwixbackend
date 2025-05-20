@@ -36,6 +36,7 @@ route.use([
   authorizeMiddleware.authorizeUser,
 ]);
 const commonC = new commonController();
+route.post("/extend-session-end-time", commonC.addExtendedSessionEndTime);
 route.post("/upload", upload.single("files"), commonC.uploads);
 route.post("/video-upload-url", commonC.videoUploadUrl);
 route.post("/saved-sessions-upload-url", commonC.sessionsVideoUploadUrl);
@@ -48,4 +49,5 @@ route.delete('/delete-saved-session/:id', commonC.deleteSavedSession);
 route.put("/update-profile-picture", commonC.profileImageUrl);
 route.post("/generate-thumbnail", upload.single('video'), commonC.generateThumbnail);
 route.post("/featured-content-upload-url", commonC.featuredContentUploadUrl);
+
 export const commonRoute: Router = route;

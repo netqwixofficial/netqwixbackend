@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import { log } from "../../../logger";
 import { commonService } from "./commonService";
 import { CONSTANCE } from "../../config/constance";
+import booked_session from "../../model/booked_sessions.schema";
 
 export class commonController {
   public logger = log.getLogger();
@@ -157,4 +158,44 @@ export class commonController {
       return res.status(statusCode).json({status: "error", message: errorMessage});
     }
   };
+
+  public addExtendedSessionEndTime = async (req: Request, res: Response) => {
+    try {
+      console.log("hellohaiji")
+        const { sessionId, extendedEndTime } = req.body;
+
+        if (!sessionId || !extendedEndTime) {
+            return res.status(400).json({
+                success: false,
+                message: "Session ID and extended end time are required"
+            });
+        }
+
+        const updatedSession = await booked_session.findByIdAndUpdate(
+            sessionId,
+            { extended_session_end_time: extendedEndTime },
+            { new: true }
+        );
+
+        if (!updatedSession) {
+            return res.status(404).json({
+                success: false,
+                message: "Session not found"
+            });
+        }
+
+        return res.status(200).json({
+            success: true,
+            data: updatedSession,
+            message: "Session end time extended successfully"
+        });
+
+    } catch (error) {
+        console.error("Error extending session time:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Internal server error"
+        });
+    }
+};
 }

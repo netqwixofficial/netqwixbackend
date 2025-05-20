@@ -526,7 +526,8 @@ export class UserService {
               start_time: 1,
               end_time: 1,
               report: 1,
-              iceServers: 1
+              iceServers: 1,
+              extended_session_end_time:1
             },
           },
           {
