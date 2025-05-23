@@ -247,12 +247,9 @@ export class commonService {
           if (userData) {
             const templateName = data.isNewUser ? "clip-shared-new-user" : "clip-shared";
             const isSingleVideo = data.thumbnails.length === 1;
-            const videoCount = data.thumbnails.length;
+        
 
-            // Prepare the dynamic message based on video count
-            let videoCountMessage = videoCount === 1
-              ? 'placed a video in your Locker'
-              : `placed ${videoCount} videos in your Locker`;
+ 
             // Prepare thumbnail HTML based on count
             // Prepare thumbnail HTML based on count
             let thumbnailsHTML = '';
@@ -281,9 +278,6 @@ export class commonService {
                             ${thumbnailsGridHTML}
                           
                           </div>
-                          <div>
-                            ${req.authUser.fullname} has ${videoCountMessage}.
-                          </div>
                         ` : '';
 
             const displayMultiple = data.thumbnails.length > 1 ? `
@@ -301,9 +295,6 @@ export class commonService {
               {
                 "[TRAINER/TRAINEE NAME]": req.authUser.fullname,
                 "[TRAINER/TRAINEE NAME2]": req.authUser.fullname,
-                "[PROFILE_PICTURE]": data.thumbnails[0],
-                "[THUMBNAILS]": thumbnailsHTML,
-                "[THUMBNAILS_GRID]": thumbnailsHTML,
                 "[DISPLAY_SINGLE]": displaySingle,
                 "[DISPLAY_MULTIPLE]": displayMultiple,
               },
