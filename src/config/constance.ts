@@ -101,7 +101,9 @@ export class EVENTS {
     ON_CLOSE: "close",
     MUTE_ME: "MUTE_ME",
     STOP_FEED: "STOP_FEED",
-    ON_CALL_JOIN: "ON_CALL_JOIN"
+    ON_CALL_JOIN: "ON_CALL_JOIN",  
+    ON_BOTH_JOIN: "ON_BOTH_JOIN",
+
   };
   public static readonly PUSH_NOTIFICATIONS = {
     ON_SEND : 'send',

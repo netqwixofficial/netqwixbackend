@@ -150,6 +150,17 @@ export const handleSocketEvents = (socket, connections = {}) => {
     // socket.broadcast.emit('offer', offer);
   });
 
+  socket.on(EVENTS.VIDEO_CALL.ON_BOTH_JOIN, (socketReq) => {
+    const toUserId = MemCache.getDetail(
+      process.env.SOCKET_CONFIG,
+      socketReq.userInfo?.to_user
+    );
+    console.log(`socketReq --- `, socketReq);
+    socket.to(toUserId).emit(EVENTS.VIDEO_CALL.ON_BOTH_JOIN, { socketReq });
+    // TODO:for now broadcasting the event, it needs to send to specific user.
+    // socket.broadcast.emit('offer', offer);
+  });
+
   // socket.on(EVENTS.VIDEO_CALL.ON_ANSWER, (data) => {
   //     // Broadcast the answer to the other connected peers
   //     console.log(`on answer --- `, data);
