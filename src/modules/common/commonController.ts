@@ -162,9 +162,9 @@ export class commonController {
   public addExtendedSessionEndTime = async (req: Request, res: Response) => {
     try {
       console.log("hellohaiji")
-        const { sessionId, extendedEndTime } = req.body;
+        const { sessionId, extendedEndTime,extended_session_end_time } = req.body;
 
-        if (!sessionId || !extendedEndTime) {
+        if (!sessionId || !extendedEndTime || !extended_session_end_time) {
             return res.status(400).json({
                 success: false,
                 message: "Session ID and extended end time are required"
@@ -173,7 +173,7 @@ export class commonController {
 
         const updatedSession = await booked_session.findByIdAndUpdate(
             sessionId,
-            { extended_session_end_time: extendedEndTime },
+            { extended_session_end_time,extended_end_time:extendedEndTime },
             { new: true }
         );
 

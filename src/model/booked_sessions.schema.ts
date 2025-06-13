@@ -82,7 +82,12 @@ const bookedSessionsSchema: Schema = new Schema(
         extended_session_end_time:{
             type: String,
             default: null,
+        },
+        extended_end_time:{
+            type: Date,
+            default: null,
         }
+
     },
     { timestamps: true }
 );
