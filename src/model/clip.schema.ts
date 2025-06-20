@@ -9,7 +9,7 @@ const clipSchema: Schema = new Schema(
     },
     category: {
       type: String,
-      required: true,
+      required: false,
     },
     file_name: {
       type: String,
