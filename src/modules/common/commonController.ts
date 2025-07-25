@@ -161,7 +161,6 @@ export class commonController {
 
   public addExtendedSessionEndTime = async (req: Request, res: Response) => {
     try {
-      console.log("hellohaiji")
         const { sessionId, extendedEndTime,extended_session_end_time } = req.body;
 
         if (!sessionId || !extendedEndTime || !extended_session_end_time) {

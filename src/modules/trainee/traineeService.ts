@@ -209,15 +209,13 @@ export class TraineeService {
       const result = await user.aggregate(pipeline);
       return ResponseBuilder.data(result, l10n.t("GET_ALL_SLOTS"));
     } catch (err) {
-      console.log(`err ---- `, err);
+      console.error(`Error getting slots of all trainers:`, err);
       return ResponseBuilder.error(err, l10n.t("ERR_INTERNAL_SERVER"));
     }
   }
 
   public filterTrainersByDayAndTime = async (day, time) => {
     try {
-      console.log(`filterQuery ---- `, day, time);
-
       const result = await schedule_inventory
         .aggregate([
           {
@@ -259,10 +257,9 @@ export class TraineeService {
         ])
         .exec();
 
-      console.log(`available_slots ---- `, result);
       return result;
     } catch (err) {
-      console.log(`err ---- `, err);
+      console.error(`Error filtering trainers by day and time:`, err);
       throw err;
     }
   };
@@ -319,9 +316,7 @@ export class TraineeService {
         sessionObj["booked_date"]
       );
       const startTime = Utils.convertToAmPm(sessionObj["session_start_time"]);
-      console.log(startTime);
       const endTime = Utils.convertToAmPm(sessionObj["session_end_time"]);
-      console.log(endTime);
 
       const timeZoneInShort = DateTime.now()
         .setZone(payload.time_zone)
@@ -403,7 +398,7 @@ export class TraineeService {
       );
       return ResponseBuilder.data(bookingData, l10n.t("SESSION_BOOKED"));
     } catch (err) {
-      console.log(err);
+      console.error("Error booking session:", err);
       const failure: Failure = {
         description: err.message,
         errorStack: err.stack || "",
@@ -470,8 +465,7 @@ export class TraineeService {
 
   public async updateProfile(reqBody, authUser): Promise<ResponseBuilder> {
     try {
-      console.log("reqBody", reqBody)
-      console.log("authUser", authUser)
+
 
       await user.findOneAndUpdate(
         { _id: authUser["_id"].toString() },
@@ -510,17 +504,11 @@ export class TraineeService {
 
       const { availabilityInfo } = trainerInfo.extraInfo;
 
-      console.log("traineeTimeZone", traineeTimeZone);
-      console.log("trainerTimeZone", availabilityInfo.timeZone);
-
       // Determine day of the week
       const date = DateTime.fromISO(booked_date, { zone: 'utc' });
       const dayOfWeek = date.toFormat("ccc");
-      console.log("date", date);
-      console.log("booked_date", dayOfWeek);
       const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
       // const dayOfWeek = days[date.getDay()];
-      console.log("availabilityInfo", availabilityInfo);
       // Get trainer's availability for the day
       const dayAvailability = availabilityInfo.availability?.[dayOfWeek] || [];
       if (dayAvailability.length === 0) {
@@ -539,7 +527,6 @@ export class TraineeService {
         booked_date,
         traineeTimeZone
       );
-      console.log("timeSlots", timeSlots);
 
       // Fetch existing bookings
       const existingBookings = await booked_session
@@ -571,15 +558,12 @@ export class TraineeService {
         ])
         .exec();
 
-      console.log("existingBookings", existingBookings);
-
       // Convert existing bookings' times to trainee's time zone only if necessary
       const normalizedBookings = existingBookings.map(booking => {
 
         let startTraineeTime = booking.start_time
         let endTraineeTime = booking.end_time
         if (traineeTimeZone !== booking.time_zone) {
-          console.log("bookingStrt", booking.start_time, booking.time_zone)
           startTraineeTime = new Date(CovertTimeAccordingToTimeZone(booking.start_time, {
             to: traineeTimeZone,
             from: booking.time_zone,
@@ -592,14 +576,11 @@ export class TraineeService {
         return { start: startTraineeTime, end: endTraineeTime };
       });
 
-      console.log("normalizedBookings", normalizedBookings)
-
       // Remove overlapping available slots
       const availableSlots = timeSlots.filter(slot => {
         return !normalizedBookings.some(booking => isOverlap(slot, booking));
       });
 
-      console.log("dayAvailability", dayAvailability);
       return ResponseBuilder.data({
         isAvailable: availableSlots.length > 0,
         availableSlots: availableSlots,

@@ -87,7 +87,7 @@ export class commonService {
     try {
       url = await s3.getSignedUrlPromise("putObject", params);
     } catch (err) {
-      console.log("err", err);
+      console.error("Error generating pre-signed URL:", err);
       // do something with the error here
       // and abort the operation.
       return;
@@ -203,7 +203,6 @@ export class commonService {
             thumbnail: thumbnailFileName,
             user_id: processedUserIds
           };
-          console.log("fileName", fileName)
           const fileUrl = await this.generatePreSignedPutUrl(fileName, clipData.fileType);
           const thumbnailURL = await this.generatePreSignedPutUrl(thumbnailFileName, clipData.thumbnail);
 
@@ -315,7 +314,7 @@ export class commonService {
       // ... (keep your existing single upload logic here)
 
     } catch (error) {
-      console.log("error", error)
+      console.error("Error in video upload URL:", error);
       res.status(CONSTANCE.RES_CODE.error.internalServerError).json({
         success: 0,
         message: Message.internal,
@@ -359,7 +358,6 @@ export class commonService {
       req.body.file_name = fileName;
       const savedSessionObj = new savedSession(req.body);
       var savedSessionData = await savedSessionObj.save();
-      console.log("SaveSession ", savedSessionData);
       let fileUrl = await this.generatePreSignedPutUrl(
         fileName,
         req?.body?.fileType
@@ -746,9 +744,6 @@ export class commonService {
 
       const fileUrl = await this.generatePreSignedPutUrl(fileName, req.body.fileType);
       const thumbnailURL = await this.generatePreSignedPutUrl(thumbnailFileName, req.body.thumbnail);
-
-      console.log("Generated File URL:", fileUrl);
-      console.log("Generated Thumbnail URL:", thumbnailURL);
 
       if (!fileUrl || !thumbnailURL) {
         return res.status(CONSTANCE.RES_CODE.error.internalServerError).json({

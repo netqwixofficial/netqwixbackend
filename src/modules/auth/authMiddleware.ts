@@ -55,7 +55,6 @@ export class AuthMiddleware {
         req["authUser"] = isUserExist;
         next();
       } else {
-        console.log("i am here")
         return res.status(CONSTANCE.RES_CODE.error.badRequest).send({
           status: CONSTANCE.FAIL,
           error: l10n.t("ERR_USER_PROFILE_NOT_EXIST", {

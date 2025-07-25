@@ -121,12 +121,9 @@ export class traineeController {
         return console.error("User not found.");
       }
 
-      console.log("result.result.start_time", result.result.start_time);
       const startTime = CovertTimeAccordingToTimeZone(result.result.start_time, { to: "utc", from: result.result.time_zone });
 
       const runTime = startTime.minus({ minutes: 5 });
-      console.log("startTime", startTime, startTime.toJSDate());
-      console.log("runTime", runTime, runTime.toJSDate());
 
       if (!trainee.isPrivate && !trainer.isPrivate) {
         if (!trainee.friends.includes(trainer._id)) {
@@ -140,8 +137,6 @@ export class traineeController {
         await trainer.save();
       }
 
-      console.log("datahaiji", result.result);
-      console.log("`${runTime.minute} ${runTime.hour} ${runTime.day} ${runTime.month} *`", `${runTime.minute} ${runTime.hour} ${runTime.day} ${runTime.month} *`)
       const cronTime = `${runTime.minute} ${runTime.hour} ${runTime.day} ${runTime.month} *`;
 
       const meetingLink = process.env.FRONTEND_URL_SMS + "/meeting?id="
@@ -152,7 +147,6 @@ export class traineeController {
         cron.schedule(cronTime, async () => {
           try {
             const iceServers = await getIceServerCredentials()
-            console.log("iceServers",iceServers)
             const session = await booked_session.findByIdAndUpdate(result.result._id,{
               iceServers
             })
@@ -226,11 +220,8 @@ export class traineeController {
         });
       } else {
         cron.schedule(cronTime, async () => {
-          
-          console.log("Running Cron", cronTime);
           try {
             const iceServers = await getIceServerCredentials()
-            console.log("iceServers",iceServers)
             const session = await booked_session.findByIdAndUpdate(result.result._id,{
               iceServers
             })
@@ -305,7 +296,6 @@ export class traineeController {
         .status(result.code)
         .send({ status: CONSTANCE.SUCCESS, data: result.result });
     } catch (err) {
-      console.log("errorhaiji", err);
       this.logger.error(err);
       return res
         .status(err.code || 500)
@@ -333,10 +323,7 @@ export class traineeController {
 
   public updateProfile = async (req: any, res: Response) => {
     try {
-      console.log("req.body", req.body);
-      console.log("UPDATE_FIELDS", UPDATE_FIELDS);
       const payload = _.pick(req.body, UPDATE_FIELDS.user);
-      console.log("payload", payload);
       const result: ResponseBuilder = await this.traineeService.updateProfile(
         payload,
         req.authUser
@@ -354,7 +341,6 @@ export class traineeController {
 
   public checkSlotExist = async (req: Request, res: Response) => {
     try {
-      console.log("body", req.body);
       const result: ResponseBuilder = await this.traineeService.checkSlotExist(
         req.body
       );
@@ -377,8 +363,6 @@ export class traineeController {
         );
       }
 
-      console.log("result", JSON.stringify(result.result));
-
       if (result.status === CONSTANCE.FAIL) {
         return res.status(result?.code || 404).send({ message: result.error });
       }
@@ -387,7 +371,6 @@ export class traineeController {
         .send({ status: CONSTANCE.SUCCESS, data: result.result });
     } catch (err) {
       this.logger.error(err);
-      console.log("err", err);
       return res
         .status(err.code || 500)
         .send({ status: CONSTANCE.FAIL, error: err });
@@ -396,7 +379,6 @@ export class traineeController {
 
   public recentTrainers = async (req: any, res: Response) => {
     try {
-      console.log("hello", req.authUser._id);
       const result: ResponseBuilder = await this.trainerService.recentTrainers(
         req?.authUser._id
       );

@@ -10,7 +10,6 @@ export class transactionService {
   public createPaymentIntent = async (body): Promise<ResponseBuilder> => {
     try {
       const result = await this.stripeHelper.createPaymentIntent(body);
-      console.log("result", result);
       switch (result.code) {
         case 200:
           return ResponseBuilder.data(

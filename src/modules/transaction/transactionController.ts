@@ -20,7 +20,6 @@ export class transactionController {
       }
       const result: ResponseBuilder =
         await this.transactionService.createPaymentIntent(req.body);
-      console.log("result124",result)
       switch (result.code) {
         case 200:
           return res

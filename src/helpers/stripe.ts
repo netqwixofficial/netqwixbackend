@@ -20,23 +20,19 @@ export class StripeHelper {
       // Step 1: Fetch the PromotionCode if a couponCode is provided
       let promotionCode: string | null = null;
       let discountAmount = 0;
-      console.log("couponCode", couponCode);
       
       if (couponCode) {
         const promotionCodes = await stripe.promotionCodes.list({
           code: couponCode, // Searching for the provided coupon code
         });
-        console.log("promotionCodes", JSON.stringify(promotionCodes));
 
         if (promotionCodes.data.length > 0) {
           const coupon = promotionCodes.data[0].coupon;  // Access the coupon associated with the promotion code
           promotionCode = promotionCodes.data[0].id;  // Get the promotion code ID
-          console.log("promotionCode", promotionCode);
           
           // Step 2: Calculate the discount based on the percent_off in the coupon
           if (coupon.percent_off) {
             discountAmount = (amount * coupon.percent_off) / 100;  // Calculate the discount
-            console.log("Discount applied:", discountAmount);
           }
         } else {
           return ResponseBuilder.badRequest("Invalid or expired coupon code.", 400);
@@ -46,7 +42,6 @@ export class StripeHelper {
 
       // Step 3: Apply the discount to the amount
       const finalAmount = amount - discountAmount;  // Subtract the discount from the original amount
-      console.log("Final Amount after Discount:", finalAmount);
 
       // Step 4: Create the payment intent parameters
       const stripe_config: any = {
@@ -83,7 +78,7 @@ export class StripeHelper {
       return ResponseBuilder.data(paymentIntent, l10n.t("TRANSACTION_INTENT_CREATED"));
     } catch (err) {
       // Handle errors
-      console.log("errinpayment", err);
+      console.error("Error in payment intent creation:", err);
       if (err["statusCode"]) {
         return ResponseBuilder.badRequest(err.raw.message, 400);
       } else {

@@ -29,8 +29,6 @@ const meetingConfirmationJob = async () => {
     const { currentDateTime, currentHour, currentMinute } =
     currentHourAndMinute;
     const formattedDate = Utils.formatDateTime(currentDateTime);
-    console.log(` --- currentHourAndMinute ---`, JSON.stringify(currentHourAndMinute));
-    console.log(` --- formattedDate --- `, JSON.stringify(formattedDate));
     const formattedDateTime = Utils.formatDateWithTimeStamp(formattedDate);
     await processBookedSessions(formattedDateTime, currentHour, currentMinute);
   } catch (err) {
@@ -122,7 +120,6 @@ const sendSessionReminderEmails = (matchedSessions: any[]) => {
 };
 
 async function cleanupInactiveUsers() {
-  console.log("=====>JOBS RUN ONLINE USER")
  // Define the inactivity threshold (2 hours in milliseconds)
   const inactiveThresholdHours = 2; 
   const inactiveThreshold = inactiveThresholdHours * 60 * 60 * 1000; // Convert to milliseconds

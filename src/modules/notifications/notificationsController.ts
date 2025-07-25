@@ -30,7 +30,6 @@ export class NotificationsController {
 
     public getNotifications = async (req: any, res: Response) => {
         try {
-            console.log(req , 'req')
             const data: ResponseBuilder = await this.notificationsService.getNotifications(req);
             return res.status(data.code).send({ status: CONSTANCE.SUCCESS, data: data.result });
         } catch (err) {

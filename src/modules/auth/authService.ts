@@ -29,7 +29,6 @@ export class AuthService {
     this.log.info(createUser);
     let hashPassword: string;
     let account: any;
-    console.log("creating new user", createUser)
     // Check if a referred user with this email exists
     const referredUser = await ReferredUser.findOne({ email: createUser.email });
 

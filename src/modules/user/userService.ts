@@ -91,8 +91,6 @@ export class UserService {
           if (traineeInfo.notifications.transactional.email) {
             const meetingLink = process.env.FRONTEND_URL_SMS + "/meeting?id=" + result._id;
             const startTime = DateTime.fromJSDate(result.start_time, { zone: 'utc' })
-            console.log("startTime", startTime)
-            console.log("startTime2", result.start_time)
             const trainerFormattedTime = `${startTime.toFormat("EEEE, MMMM d'th' h:mm a")} ${timeZoneAbbreviations[result.time_zone] || result.time_zone}`
 
             if (payload.booked_status === "confirmed") {
@@ -135,7 +133,6 @@ export class UserService {
 
           }
           const meetingLink = process.env.FRONTEND_URL_SMS + "/meeting?id="
-          console.log("meeting link", meetingLink + bookedSessionDetail._id)
 
           if (traineeInfo.notifications.transactional.sms) {
             await smsService.sendSMS(traineeInfo.mobile_no, " NetQwix Training Session has been confirmed you may start the lesson using this link " + meetingLink + bookedSessionDetail._id);
@@ -176,14 +173,10 @@ export class UserService {
           });
 
 
-          console.log("emailhai")
           const traineeName = traineeInfo.fullname;
           const trainerName = trainerInfo.fullname;
           if (traineeInfo.notifications.transactional.email) {
-            console.log("emailhai1")
             const startTime = DateTime.fromJSDate(result.start_time, { zone: 'utc' })
-            console.log("startTime", startTime)
-            console.log("startTime2", result.start_time)
             const trainerFormattedTime = `${startTime.toFormat("EEEE, MMMM d'th' h:mm a")} ${timeZoneAbbreviations[result.time_zone] || result.time_zone}`
            
             SendEmail.sendRawEmail(
@@ -317,7 +310,6 @@ export class UserService {
       if (!userInfo) {
         return ResponseBuilder.data({ userInfo }, "User not found");
       } else {
-        console.log("userInfo", userInfo._doc)
         // const emailTemplate =
         //   userInfo._doc.account_type === AccountType.TRAINER
         //     ? "refer-expert"
@@ -398,7 +390,6 @@ export class UserService {
 
   public async updateMobileNumber(userInfo: any, numbers: { old: string, new: string }) {
     try {
-      console.log("userInfo", userInfo.mobile_no, numbers.old)
       if (userInfo.mobile_no !== numbers.old) {
         return ResponseBuilder.badRequest("old password is incorrect.");
       }

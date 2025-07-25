@@ -165,22 +165,6 @@ export class TrainerService {
 
   public async getTrainers(query): Promise<ResponseBuilder> {
     try {
-      this.log.info(query);
-      // const { search } = query;
-      // if (
-      //   typeof search !== "string" ||
-      //   search.trim() === "" ||
-      //   !isNaN(Number(search))
-      // ) {
-      //   return ResponseBuilder.badRequest(
-      //     "Search parameter must be a non-empty string",
-      //     400
-      //   );
-      // }
-      // let searchQuery = getSearchRegexQuery(
-      //   search,
-      //   CONSTANCE.TRAINER_SEARCH_KEYS
-      // );
       const result = await user.aggregate([
         {
           $match: {
@@ -201,6 +185,7 @@ export class TrainerService {
       ]);
       return ResponseBuilder.data(result, l10n.t("NO_TRAINERS_FOUND"));
     } catch (error) {
+      console.error("Error getting trainers:", error);
       return ResponseBuilder.errorMessage("Internal server error");
     }
   }
@@ -241,7 +226,7 @@ export class TrainerService {
       const result = await booked_session.aggregate(pipeline);
       return ResponseBuilder.data(result, l10n.t("NO_TRAINERS_FOUND"));
     } catch (error) {
-      console.log("====+", error)
+      console.error("Error getting recent trainees:", error);
       return ResponseBuilder.errorMessage("Internal server error");
     }
   }
@@ -265,7 +250,7 @@ export class TrainerService {
       );
       return ResponseBuilder.data({}, l10n.t("PROFILE_UPDATED"));
     } catch (err) {
-      console.log("error,,",err)
+      console.error("Error updating profile:", err);
       throw err;
     }
   }
@@ -390,10 +375,9 @@ export class TrainerService {
         }
       ]
       const result = await booked_session.aggregate(pipeline);
-      console.log("result123",result)
       return ResponseBuilder.data(result, l10n.t("NO_TRAINERS_FOUND"));
     } catch (error) {
-      console.log("====+", error)
+      console.error("Error getting recent trainers:", error);
       return ResponseBuilder.errorMessage("Internal server error");
     }
   }

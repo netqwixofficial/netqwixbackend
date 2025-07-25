@@ -64,7 +64,7 @@ export class ReportService {
     try {
       url = await s3.getSignedUrlPromise("putObject", params);
     } catch (err) {
-      console.log("err", err);
+      console.error("Error generating pre-signed URL:", err);
       // do something with the error here
       // and abort the operation.
       return;
@@ -183,7 +183,6 @@ export class ReportService {
       trainee: data?.trainee,
       trainer: data?.trainer,
     });
-    console.log("===========>", report);
     if (report) {
       return ResponseBuilder.data(report, l10n.t("REPORT_GET"));
     } else {
@@ -278,7 +277,6 @@ export class ReportService {
 
   public async getAllReport(data: any): Promise<ResponseBuilder> {
     try {
-      console.log(data, "data");
       //NOTE -we will get data based on this user_id , when we call the api from admin for each trainer and trainee
       const id = data?.user_id || data?._id;
       const traineeIsNotAvailableMatchQuery = {

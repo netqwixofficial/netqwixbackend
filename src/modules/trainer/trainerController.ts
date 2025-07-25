@@ -175,7 +175,6 @@ export class trainerController {
   public updateProfile = async (req: any, res: Response) => {
     try {
       const payload = _.pick(req.body, UPDATE_FIELDS.user);
-      console.log(`payload --- `, payload);
       const result: ResponseBuilder = await this.trainerService.updateProfile(
         payload,
         req.authUser

@@ -45,8 +45,6 @@ async function updateUserActivity(socket) {
 
     if (socket?.user?._doc?.account_type === "Trainer") {
       activeUsers[userId] = { ...socket.user._doc };
-      console.log("typeof socket.user._doc._id:", typeof socket.user._doc._id);
-      console.log("socket.user._doc._id:", socket.user._doc._id);
       if (socket.user._doc._id) {
         const checkIfUserIsAlreadyAdded = await onlineUser.findOne({
           trainer_id: socket.user._doc._id,
@@ -116,7 +114,7 @@ async function updateUserActivity(socket) {
       }
     });
   } catch (error) {
-    console.log("error for online Users", error)
+    console.error("Error for online Users", error)
   }
 
 }
@@ -132,8 +130,6 @@ export const handleSocketEvents = (socket, connections = {}) => {
       process.env.SOCKET_CONFIG,
       userInfo?.to_user
     );
-    console.log(`EVENTS.VIDEO_CALL.ON_OFFER on offer --- `, userInfo);
-    console.log(`EVENTS.VIDEO_CALL.ON_OFFER to userID --- `, toUserId);
     socket.to(toUserId).emit("offer", offer);
     // TODO:for now broadcasting the event, it needs to send to specific user.
     // socket.broadcast.emit('offer', offer);
@@ -144,7 +140,6 @@ export const handleSocketEvents = (socket, connections = {}) => {
       process.env.SOCKET_CONFIG,
       userInfo?.to_user
     );
-    console.log(`userInfo --- `, userInfo);
     socket.to(toUserId).emit(EVENTS.VIDEO_CALL.ON_CALL_JOIN, { userInfo });
     // TODO:for now broadcasting the event, it needs to send to specific user.
     // socket.broadcast.emit('offer', offer);
@@ -155,7 +150,6 @@ export const handleSocketEvents = (socket, connections = {}) => {
       process.env.SOCKET_CONFIG,
       socketReq.userInfo?.to_user
     );
-    console.log(`socketReq --- `, socketReq);
     socket.to(toUserId).emit(EVENTS.VIDEO_CALL.ON_BOTH_JOIN, { socketReq });
     // TODO:for now broadcasting the event, it needs to send to specific user.
     // socket.broadcast.emit('offer', offer);
@@ -286,7 +280,6 @@ const listenNotificationEvents = (socket) => {
       });
       if (subscription) {
         try {
-          console.log("Enter in web push", subscription);
           await webpush.sendNotification(
             subscription,
             JSON.stringify({ title, description })
@@ -297,7 +290,7 @@ const listenNotificationEvents = (socket) => {
       }
     });
   } catch (err) {
-    console.log(`while listen draw event `, err);
+    console.error(`Error while listening to notification event:`, err);
     throw err;
   }
 };
@@ -316,7 +309,7 @@ const listenDrawEvent = (socket) => {
       socket.to(toUserSocketId).emit(EVENTS.EMIT_DRAWING_CORDS, socketReq);
     });
   } catch (err) {
-    console.log(`while listen draw event `, err);
+    console.error(`Error while listening to draw event:`, err);
     throw err;
   }
 };
@@ -333,7 +326,7 @@ const stopDrawEvent = (socket) => {
       socket.to(toUserSocketId).emit(EVENTS.EMIT_STOP_DRAWING, socketReq);
     });
   } catch (err) {
-    console.log(`while stop draw event `, err);
+    console.error(`Error while listening to stop draw event:`, err);
     throw err;
   }
 };
@@ -349,7 +342,7 @@ const listenVideoShowEvent = (socket) => {
       socket.to(toUserSocketId).emit(EVENTS.ON_VIDEO_SHOW, socketReq);
     });
   } catch (err) {
-    console.log(`while listen video show event `, err);
+    console.error(`Error while listening to video show event:`, err);
     throw err;
   }
 };
@@ -365,7 +358,7 @@ const listenDrawingModeToggle = (socket) => {
       socket.to(toUserSocketId).emit(EVENTS.TOGGLE_DRAWING_MODE, socketReq);
     });
   } catch (err) {
-    console.log(`while listen drawing mode toggle `, err);
+    console.error(`Error while listening to drawing mode toggle:`, err);
     throw err;
   }
 };
@@ -381,7 +374,7 @@ const listenFullscreenToggle = (socket) => {
       socket.to(toUserSocketId).emit(EVENTS.TOGGLE_FULL_SCREEN, socketReq);
     });
   } catch (err) {
-    console.log(`while listen fullscreen toggle `, err);
+    console.error(`Error while listening to fullscreen toggle:`, err);
     throw err;
   }
 };
@@ -397,7 +390,7 @@ const listenLockModeToggle = (socket) => {
       socket.to(toUserSocketId).emit(EVENTS.TOGGLE_LOCK_MODE, socketReq);
     });
   } catch (err) {
-    console.log(`while listen lock mode toggle `, err);
+    console.error(`Error while listening to lock mode toggle:`, err);
     throw err;
   }
 };
@@ -415,7 +408,7 @@ const listenVideoPositionEvent = (socket) => {
       socket.to(toUserSocketId).emit(EVENTS.ON_VIDEO_ZOOM_PAN, socketReq);
     });
   } catch (err) {
-    console.log(`while listen draw event `, err);
+    console.error(`Error while listening to video position event:`, err);
     throw err;
   }
 };
@@ -431,7 +424,7 @@ const listenShowVideoEvent = (socket) => {
       socket.to(toUserSocketId).emit(EVENTS.ON_VIDEO_SELECT, socketReq);
     });
   } catch (err) {
-    console.log(`while listen draw event `, err);
+    console.error(`Error while listening to show video event:`, err);
     throw err;
   }
 };
@@ -447,7 +440,7 @@ const listenCallEndEvent = (socket) => {
       socket.to(toUserSocketId).emit(EVENTS.CALL_END, socketReq);
     });
   } catch (err) {
-    console.log(`while listen call end event `, err);
+    console.error(`Error while listening to call end event:`, err);
     throw err;
   }
 };
@@ -463,7 +456,7 @@ const listenPlayPauseVideoEvent = (socket) => {
       socket.to(toUserSocketId).emit(EVENTS.ON_VIDEO_PLAY_PAUSE, socketReq);
     });
   } catch (err) {
-    console.log(`while listen draw event `, err);
+    console.error(`Error while listening to play pause video event:`, err);
     throw err;
   }
 };
@@ -478,7 +471,7 @@ const listenVideoTimeEvent = (socket) => {
       socket.to(toUserSocketId).emit(EVENTS.ON_VIDEO_TIME, socketReq);
     });
   } catch (err) {
-    console.log(`while listen draw event `, err);
+    console.error(`Error while listening to video time event:`, err);
     throw err;
   }
 };
@@ -496,7 +489,7 @@ const generatePreSignedPutUrl = async (fileName, fileType) => {
   try {
     url = await s3.getSignedUrlPromise("putObject", params);
   } catch (err) {
-    console.log("err", err);
+    console.error("Error generating pre-signed URL:", err);
     // do something with the error here
     // and abort the operation.
     return;
@@ -514,8 +507,6 @@ const listenVideoChunksEvent = (socket) => {
 
     // chunks.push(actualChunk);
     chunks.push(...chunkData?.data); // Push the buffers directly
-
-    console.log("Received chunk:", actualChunk);
   });
 
   socket.on("videoUploadData", (data) => {

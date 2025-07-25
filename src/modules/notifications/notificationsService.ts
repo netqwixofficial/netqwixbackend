@@ -66,7 +66,7 @@ export class NotificationsService {
         return ResponseBuilder.data(data, l10n.t("Get All Notifications"));
     }
     catch(error){
-        console.log(error , 'error')
+        console.error("Error getting notifications:", error);
         return ResponseBuilder.errorMessage(l10n.t("ERR_INTERNAL_SERVER"));
     }
   }
@@ -74,7 +74,6 @@ export class NotificationsService {
       try{
           const userId = req?.authUser?._id;
           const {page} = req?.body ;
-          console.log(userId)
 
           const notifications = await notification.find({
             receiverId: userId,
@@ -84,9 +83,7 @@ export class NotificationsService {
           .limit(10)
           .skip((page - 1) * 10)
           
-          console.log(notifications , 'notifications')
           const notificationIds = notifications?.map(notif => notif._id) || [];
-          console.log(notificationIds , 'notificationIds')
           
           await notification.updateMany(
             { _id: { $in: notificationIds } },
@@ -95,7 +92,7 @@ export class NotificationsService {
           return ResponseBuilder.successMessage("Notification Status Updated successfully");
     }
     catch(error){
-        console.log(error , 'error')
+        console.error("Error updating notification status:", error);
         return ResponseBuilder.errorMessage(l10n.t("ERR_INTERNAL_SERVER"));
     }
   }

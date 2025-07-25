@@ -232,8 +232,6 @@ export class userController {
         );
         result.result = result.result.filter(user => user.account_type !== "Admin");
 
-        console.log("results", result.result)
-
         if (result.status !== CONSTANCE.FAIL) {
           res.status(result.code).json(result);
         } else {
