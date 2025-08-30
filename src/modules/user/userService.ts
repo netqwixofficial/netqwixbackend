@@ -442,6 +442,11 @@ export class UserService {
         };
       }
 
+      // Calculate the date from two days before today
+      const twoDaysAgo = new Date();
+      twoDaysAgo.setDate(twoDaysAgo.getDate() - 2);
+      twoDaysAgo.setHours(0, 0, 0, 0); // Set to start of day
+
       const result = await booked_session
         .aggregate([
           {
@@ -452,7 +457,11 @@ export class UserService {
               end_time: { $exists: true, $ne: null },
               session_end_time: { $exists: true, $ne: null },
               session_start_time: { $exists: true, $ne: null },
-              booked_date: { $exists: true, $ne: null }
+              booked_date: { 
+                $exists: true, 
+                $ne: null,
+                $gte: twoDaysAgo 
+              }
             },
           },
           {
@@ -827,9 +836,18 @@ export class UserService {
         matchObj.trainee_id = trainer_id;
       }
 
+      // Calculate the date from two days before today
+      const twoDaysAgo = new Date();
+      twoDaysAgo.setDate(twoDaysAgo.getDate() - 2);
+      twoDaysAgo.setHours(0, 0, 0, 0); // Set to start of day
+
       const pipeline: PipelineStage[] = [
         {
-          $match: matchObj,
+          $match: {
+            ...matchObj,
+            // Filter bookings from two days before to future
+            booked_date: { $gte: twoDaysAgo }
+          },
         },
         {
           $lookup: {
