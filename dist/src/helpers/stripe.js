@@ -1,0 +1,91 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.StripeHelper = void 0;
+const Utils_1 = require("../Utils/Utils");
+const constance_1 = require("../config/constance");
+const responseBuilder_1 = require("./responseBuilder");
+const l10n = require("jm-ez-l10n");
+const stripe = require("stripe")(process.env.STRIPE_SECRET);
+class StripeHelper {
+    constructor() {
+        this.createPaymentIntent = async (body, currency = "usd") => {
+            try {
+                const { amount, destination, commission, customer, couponCode } = body;
+                if (typeof amount !== "number") {
+                    return responseBuilder_1.ResponseBuilder.badRequest("Invalid amount.");
+                }
+                if (!constance_1.CONSTANCE.supportedCurrencies.includes(currency.toLowerCase())) {
+                    return responseBuilder_1.ResponseBuilder.badRequest("Invalid currency.");
+                }
+                // Step 1: Fetch the PromotionCode if a couponCode is provided
+                let promotionCode = null;
+                let discountAmount = 0;
+                console.log("couponCode", couponCode);
+                if (couponCode) {
+                    const promotionCodes = await stripe.promotionCodes.list({
+                        code: couponCode, // Searching for the provided coupon code
+                    });
+                    console.log("promotionCodes", JSON.stringify(promotionCodes));
+                    if (promotionCodes.data.length > 0) {
+                        const coupon = promotionCodes.data[0].coupon; // Access the coupon associated with the promotion code
+                        promotionCode = promotionCodes.data[0].id; // Get the promotion code ID
+                        console.log("promotionCode", promotionCode);
+                        // Step 2: Calculate the discount based on the percent_off in the coupon
+                        if (coupon.percent_off) {
+                            discountAmount = (amount * coupon.percent_off) / 100; // Calculate the discount
+                            console.log("Discount applied:", discountAmount);
+                        }
+                    }
+                    else {
+                        return responseBuilder_1.ResponseBuilder.badRequest("Invalid or expired coupon code.", 400);
+                    }
+                }
+                // Step 3: Apply the discount to the amount
+                const finalAmount = amount - discountAmount; // Subtract the discount from the original amount
+                console.log("Final Amount after Discount:", finalAmount);
+                // Step 4: Create the payment intent parameters
+                const stripe_config = {
+                    amount: Utils_1.Utils.roundedAmount(finalAmount * 100),
+                    currency: currency.toLowerCase(),
+                    description: "netquix - trainer fees",
+                    shipping: {
+                        name: "Test user",
+                        address: {
+                            line1: "510 Townsend St",
+                            postal_code: "98140",
+                            city: "San Francisco",
+                            state: "CA",
+                            country: "US",
+                        },
+                    },
+                    payment_method_types: ['card', 'amazon_pay', 'cashapp', 'link'],
+                    customer: customer ?? "",
+                    application_fee_amount: Math.round(finalAmount * Number(commission)),
+                    transfer_data: {
+                        destination: destination, // The recipient of the transfer
+                    },
+                };
+                console.log("=====> stripe_config", stripe_config);
+                if (stripe_config.amount <= 0) {
+                    return responseBuilder_1.ResponseBuilder.data({ skip: true }, "SKIP_TRANSACTION_INTENT");
+                }
+                const paymentIntent = await stripe.paymentIntents.create(stripe_config);
+                // Step 5: Create the payment intent
+                // Return success response with the payment intent details
+                return responseBuilder_1.ResponseBuilder.data(paymentIntent, l10n.t("TRANSACTION_INTENT_CREATED"));
+            }
+            catch (err) {
+                // Handle errors
+                console.log("errinpayment", err);
+                if (err["statusCode"]) {
+                    return responseBuilder_1.ResponseBuilder.badRequest(err.raw.message, 400);
+                }
+                else {
+                    return responseBuilder_1.ResponseBuilder.error(err, l10n.t("ERR_INTERNAL_SERVER"));
+                }
+            }
+        };
+    }
+}
+exports.StripeHelper = StripeHelper;
+//# sourceMappingURL=stripe.js.map
