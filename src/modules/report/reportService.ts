@@ -184,7 +184,11 @@ export class ReportService {
       trainer: data?.trainer,
     });
     if (report) {
-      return ResponseBuilder.data(report, l10n.t("REPORT_GET"));
+      // Add flag to indicate logos should not be added to individual images in PDF
+      // Logo should only appear at the top right of the PDF, not on each image
+      const reportData = report.toObject ? report.toObject() : report;
+      reportData.addLogoToImages = false;
+      return ResponseBuilder.data(reportData, l10n.t("REPORT_GET"));
     } else {
       return ResponseBuilder.errorMessage(l10n.t("ERR_INTERNAL_SERVER"));
     }
@@ -382,7 +386,14 @@ export class ReportService {
       ]);
 
       if (report?.length) {
-        return ResponseBuilder.data(report, l10n.t("REPORT_GET"));
+        // Add flag to indicate logos should not be added to individual images in PDF
+        // Logo should only appear at the top right of the PDF, not on each image
+        const reportWithFlag = report.map((r: any) => {
+          const reportItem = { ...r };
+          reportItem.addLogoToImages = false;
+          return reportItem;
+        });
+        return ResponseBuilder.data(reportWithFlag, l10n.t("REPORT_GET"));
       } else {
         return ResponseBuilder.data([], l10n.t("REPORT_NOT_FOUND"));
       }
