@@ -13,6 +13,7 @@ import notification from "../../model/notifications.schema";
 import user from "../../model/user.schema";
 import { NotificationType } from "../../enum/notification.enum";
 import mongoose from "mongoose";
+import booked_session from "../../model/booked_sessions.schema";
 const logoPath = path.resolve(__dirname, "../../assets/netqwix_logo.png");
 
 const bucketName = process.env.AWS_BUCKET_NAME;
@@ -35,6 +36,19 @@ webpush.setVapidDetails(
 );
 
 let activeUsers = {};
+
+// Lesson session state tracking - backend is authoritative for timer start
+type LessonSessionState = {
+  sessionId: string; // booked_session._id
+  coachJoined: boolean;
+  userJoined: boolean;
+  startedAt: number | null; // unix timestamp (ms) - authoritative backend time
+  duration: number; // in seconds, calculated from session_start_time and session_end_time
+  warningTimeoutId?: NodeJS.Timeout | null;
+  endTimeoutId?: NodeJS.Timeout | null;
+};
+
+const lessonSessions: Map<string, LessonSessionState> = new Map();
 
 // Update user's activity status
 async function updateUserActivity(socket) {
@@ -135,22 +149,138 @@ export const handleSocketEvents = (socket, connections = {}) => {
     // socket.broadcast.emit('offer', offer);
   });
 
-  socket.on(EVENTS.VIDEO_CALL.ON_CALL_JOIN, ({ userInfo }) => {
+  socket.on(EVENTS.VIDEO_CALL.ON_CALL_JOIN, async ({ userInfo }) => {
     const toUserId = MemCache.getDetail(
       process.env.SOCKET_CONFIG,
       userInfo?.to_user
     );
+    
+    // Track join state for timer logic - sessionId is booked_session._id
+    const sessionId = userInfo?.sessionId || userInfo?.meetingId || userInfo?.lessonId;
+    if (sessionId && mongoose.isValidObjectId(sessionId)) {
+      let session = lessonSessions.get(sessionId);
+      if (!session) {
+        // Fetch booked session to get duration
+        try {
+          const bookedSession = await booked_session.findById(sessionId);
+          if (bookedSession) {
+            // Calculate duration from start_time and end_time (Date objects) if available
+            // Otherwise calculate from session_start_time and session_end_time (string HH:mm)
+            let durationSeconds = 30 * 60; // default 30 minutes
+            if (bookedSession.start_time && bookedSession.end_time) {
+              durationSeconds = Math.floor((bookedSession.end_time.getTime() - bookedSession.start_time.getTime()) / 1000);
+            } else if (bookedSession.session_start_time && bookedSession.session_end_time) {
+              // Parse HH:mm strings and calculate duration
+              const [startH, startM] = bookedSession.session_start_time.split(':').map(Number);
+              const [endH, endM] = bookedSession.session_end_time.split(':').map(Number);
+              const startMinutes = startH * 60 + startM;
+              const endMinutes = endH * 60 + endM;
+              durationSeconds = (endMinutes - startMinutes) * 60; // convert to seconds
+            }
+            
+            session = {
+              sessionId,
+              coachJoined: false,
+              userJoined: false,
+              startedAt: null,
+              duration: durationSeconds > 0 ? durationSeconds : 30 * 60,
+              warningTimeoutId: null,
+              endTimeoutId: null,
+            };
+            lessonSessions.set(sessionId, session);
+          }
+        } catch (err) {
+          console.error("Error fetching booked session for timer:", err);
+        }
+      }
+      
+      if (session) {
+        // Determine if this is coach (Trainer) or user (Trainee) based on account_type
+        const accountType = socket?.user?._doc?.account_type || socket?.user?.account_type;
+        if (accountType === "Trainer") {
+          session.coachJoined = true;
+        } else {
+          session.userJoined = true;
+        }
+      }
+    }
+    
     socket.to(toUserId).emit(EVENTS.VIDEO_CALL.ON_CALL_JOIN, { userInfo });
     // TODO:for now broadcasting the event, it needs to send to specific user.
     // socket.broadcast.emit('offer', offer);
   });
 
-  socket.on(EVENTS.VIDEO_CALL.ON_BOTH_JOIN, (socketReq) => {
+  socket.on(EVENTS.VIDEO_CALL.ON_BOTH_JOIN, async (socketReq) => {
     const toUserId = MemCache.getDetail(
       process.env.SOCKET_CONFIG,
       socketReq.userInfo?.to_user
     );
-    socket.to(toUserId).emit(EVENTS.VIDEO_CALL.ON_BOTH_JOIN, { socketReq });
+    
+    // Start timer ONLY when both have joined and timer hasn't started
+    const sessionId = socketReq?.sessionId || socketReq?.userInfo?.sessionId || socketReq?.userInfo?.meetingId || socketReq?.userInfo?.lessonId;
+    if (sessionId && mongoose.isValidObjectId(sessionId)) {
+      const session = lessonSessions.get(sessionId);
+      if (session && session.coachJoined && session.userJoined && session.startedAt === null) {
+        // Timer must start ONLY when both are true AND startedAt is null
+        const now = Date.now();
+        session.startedAt = now;
+        
+        const roomName = `session:${sessionId}`;
+        socket.join(roomName);
+        const otherSocketId = MemCache.getDetail(process.env.SOCKET_CONFIG, socketReq.userInfo?.to_user);
+        if (otherSocketId) {
+          const otherSocket = socket.nsp.sockets.get(otherSocketId);
+          if (otherSocket) {
+            otherSocket.join(roomName);
+          }
+        }
+        
+        // Emit authoritative timer start event with existing ON_BOTH_JOIN
+        const timerPayload = {
+          sessionId: session.sessionId,
+          startedAt: session.startedAt,
+          duration: session.duration,
+        };
+        socket.nsp.to(roomName).emit(EVENTS.VIDEO_CALL.ON_BOTH_JOIN, {
+          ...socketReq,
+          timerStarted: timerPayload,
+        });
+        
+        // Schedule warning at 30 seconds remaining
+        const totalMs = session.duration * 1000;
+        const warningMs = totalMs - 30 * 1000;
+        if (warningMs > 0) {
+          session.warningTimeoutId = setTimeout(() => {
+            socket.nsp.to(roomName).emit("LESSON_TIME_WARNING", {
+              sessionId: session.sessionId,
+              remainingSeconds: 30,
+            });
+          }, warningMs);
+        }
+        
+        // Schedule time ended
+        session.endTimeoutId = setTimeout(() => {
+          socket.nsp.to(roomName).emit("LESSON_TIME_ENDED", {
+            sessionId: session.sessionId,
+            startedAt: session.startedAt,
+            duration: session.duration,
+          });
+          
+          // Clean up
+          const current = lessonSessions.get(sessionId);
+          if (current && current.endTimeoutId === session.endTimeoutId) {
+            if (current.warningTimeoutId) clearTimeout(current.warningTimeoutId);
+            lessonSessions.delete(sessionId);
+          }
+        }, totalMs);
+      } else {
+        // Both joined but timer already started OR not both joined yet - just forward the event
+        socket.to(toUserId).emit(EVENTS.VIDEO_CALL.ON_BOTH_JOIN, { socketReq });
+      }
+    } else {
+      // No valid sessionId - fallback to original behavior
+      socket.to(toUserId).emit(EVENTS.VIDEO_CALL.ON_BOTH_JOIN, { socketReq });
+    }
     // TODO:for now broadcasting the event, it needs to send to specific user.
     // socket.broadcast.emit('offer', offer);
   });
