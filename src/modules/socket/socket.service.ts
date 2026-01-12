@@ -119,6 +119,19 @@ async function updateUserActivity(socket) {
       } catch (error) {
         console.error("Error updating last_activity_time on disconnect:", error);
       }
+
+      // Clean up timer state if user disconnects during a session
+      // Reset their join status but don't stop the timer if it's already started
+      const accountType = socket?.user?._doc?.account_type || socket?.user?.account_type;
+      for (const [sessionId, session] of lessonSessions.entries()) {
+        if (accountType === "Trainer" && session.coachJoined) {
+          session.coachJoined = false;
+          console.log(`[TIMER] Trainer ${userId} disconnected from session ${sessionId}`);
+        } else if (accountType !== "Trainer" && session.userJoined) {
+          session.userJoined = false;
+          console.log(`[TIMER] Trainee ${userId} disconnected from session ${sessionId}`);
+        }
+      }
     });
 
     // Listen for any event to update the user's last activity time
@@ -188,6 +201,7 @@ export const handleSocketEvents = (socket, connections = {}) => {
               endTimeoutId: null,
             };
             lessonSessions.set(sessionId, session);
+            console.log(`[TIMER] Session ${sessionId} initialized with duration ${session.duration}s`);
           }
         } catch (err) {
           console.error("Error fetching booked session for timer:", err);
@@ -197,17 +211,76 @@ export const handleSocketEvents = (socket, connections = {}) => {
       if (session) {
         // Determine if this is coach (Trainer) or user (Trainee) based on account_type
         const accountType = socket?.user?._doc?.account_type || socket?.user?.account_type;
+        const userId = socket?.user?._doc?._id || socket?.user?._id;
+        
         if (accountType === "Trainer") {
           session.coachJoined = true;
+          console.log(`[TIMER] Trainer ${userId} joined session ${sessionId}. Coach joined: ${session.coachJoined}, User joined: ${session.userJoined}`);
         } else {
           session.userJoined = true;
+          console.log(`[TIMER] Trainee ${userId} joined session ${sessionId}. Coach joined: ${session.coachJoined}, User joined: ${session.userJoined}`);
+        }
+        
+        // Check if both parties have joined - if so, start the timer immediately
+        if (session.coachJoined && session.userJoined && session.startedAt === null) {
+          const now = Date.now();
+          session.startedAt = now;
+          
+          const roomName = `session:${sessionId}`;
+          socket.join(roomName);
+          const otherSocketId = MemCache.getDetail(process.env.SOCKET_CONFIG, userInfo?.to_user);
+          if (otherSocketId) {
+            const otherSocket = socket.nsp.sockets.get(otherSocketId);
+            if (otherSocket) {
+              otherSocket.join(roomName);
+            }
+          }
+          
+          // Emit timer start event immediately when both join
+          const timerPayload = {
+            sessionId: session.sessionId,
+            startedAt: session.startedAt,
+            duration: session.duration,
+          };
+          
+          console.log(`[TIMER] Both parties joined! Starting timer for session ${sessionId} at ${new Date(session.startedAt).toISOString()}`);
+          
+          socket.nsp.to(roomName).emit("TIMER_STARTED", timerPayload);
+          
+          // Schedule warning at 30 seconds remaining
+          const totalMs = session.duration * 1000;
+          const warningMs = totalMs - 30 * 1000;
+          if (warningMs > 0) {
+            session.warningTimeoutId = setTimeout(() => {
+              socket.nsp.to(roomName).emit("LESSON_TIME_WARNING", {
+                sessionId: session.sessionId,
+                remainingSeconds: 30,
+              });
+              console.log(`[TIMER] Warning: 30 seconds remaining for session ${sessionId}`);
+            }, warningMs);
+          }
+          
+          // Schedule time ended
+          session.endTimeoutId = setTimeout(() => {
+            socket.nsp.to(roomName).emit("LESSON_TIME_ENDED", {
+              sessionId: session.sessionId,
+              startedAt: session.startedAt,
+              duration: session.duration,
+            });
+            console.log(`[TIMER] Time ended for session ${sessionId}`);
+            
+            // Clean up
+            const current = lessonSessions.get(sessionId);
+            if (current && current.endTimeoutId === session.endTimeoutId) {
+              if (current.warningTimeoutId) clearTimeout(current.warningTimeoutId);
+              lessonSessions.delete(sessionId);
+            }
+          }, totalMs);
         }
       }
     }
     
     socket.to(toUserId).emit(EVENTS.VIDEO_CALL.ON_CALL_JOIN, { userInfo });
-    // TODO:for now broadcasting the event, it needs to send to specific user.
-    // socket.broadcast.emit('offer', offer);
   });
 
   socket.on(EVENTS.VIDEO_CALL.ON_BOTH_JOIN, async (socketReq) => {
@@ -216,73 +289,24 @@ export const handleSocketEvents = (socket, connections = {}) => {
       socketReq.userInfo?.to_user
     );
     
-    // Start timer ONLY when both have joined and timer hasn't started
+    // Check if timer has already started - if so, send timer info to the newly joined party
     const sessionId = socketReq?.sessionId || socketReq?.userInfo?.sessionId || socketReq?.userInfo?.meetingId || socketReq?.userInfo?.lessonId;
     if (sessionId && mongoose.isValidObjectId(sessionId)) {
       const session = lessonSessions.get(sessionId);
-      if (session && session.coachJoined && session.userJoined && session.startedAt === null) {
-        // Timer must start ONLY when both are true AND startedAt is null
-        const now = Date.now();
-        session.startedAt = now;
-        
-        const roomName = `session:${sessionId}`;
-        socket.join(roomName);
-        const otherSocketId = MemCache.getDetail(process.env.SOCKET_CONFIG, socketReq.userInfo?.to_user);
-        if (otherSocketId) {
-          const otherSocket = socket.nsp.sockets.get(otherSocketId);
-          if (otherSocket) {
-            otherSocket.join(roomName);
-          }
-        }
-        
-        // Emit authoritative timer start event with existing ON_BOTH_JOIN
+      if (session && session.startedAt !== null) {
+        // Timer already started - send current timer state to the joining party
         const timerPayload = {
           sessionId: session.sessionId,
           startedAt: session.startedAt,
           duration: session.duration,
         };
-        socket.nsp.to(roomName).emit(EVENTS.VIDEO_CALL.ON_BOTH_JOIN, {
-          ...socketReq,
-          timerStarted: timerPayload,
-        });
-        
-        // Schedule warning at 30 seconds remaining
-        const totalMs = session.duration * 1000;
-        const warningMs = totalMs - 30 * 1000;
-        if (warningMs > 0) {
-          session.warningTimeoutId = setTimeout(() => {
-            socket.nsp.to(roomName).emit("LESSON_TIME_WARNING", {
-              sessionId: session.sessionId,
-              remainingSeconds: 30,
-            });
-          }, warningMs);
-        }
-        
-        // Schedule time ended
-        session.endTimeoutId = setTimeout(() => {
-          socket.nsp.to(roomName).emit("LESSON_TIME_ENDED", {
-            sessionId: session.sessionId,
-            startedAt: session.startedAt,
-            duration: session.duration,
-          });
-          
-          // Clean up
-          const current = lessonSessions.get(sessionId);
-          if (current && current.endTimeoutId === session.endTimeoutId) {
-            if (current.warningTimeoutId) clearTimeout(current.warningTimeoutId);
-            lessonSessions.delete(sessionId);
-          }
-        }, totalMs);
-      } else {
-        // Both joined but timer already started OR not both joined yet - just forward the event
-        socket.to(toUserId).emit(EVENTS.VIDEO_CALL.ON_BOTH_JOIN, { socketReq });
+        socket.emit("TIMER_STARTED", timerPayload);
+        console.log(`[TIMER] Sending existing timer state to newly joined party for session ${sessionId}`);
       }
-    } else {
-      // No valid sessionId - fallback to original behavior
-      socket.to(toUserId).emit(EVENTS.VIDEO_CALL.ON_BOTH_JOIN, { socketReq });
     }
-    // TODO:for now broadcasting the event, it needs to send to specific user.
-    // socket.broadcast.emit('offer', offer);
+    
+    // Forward the ON_BOTH_JOIN event (for other UI purposes, not timer)
+    socket.to(toUserId).emit(EVENTS.VIDEO_CALL.ON_BOTH_JOIN, { socketReq });
   });
 
   // socket.on(EVENTS.VIDEO_CALL.ON_ANSWER, (data) => {
