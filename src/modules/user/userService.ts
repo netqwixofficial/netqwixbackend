@@ -442,82 +442,56 @@ export class UserService {
         };
       }
 
-      // Handle status filter - normalize "cancelled" to "canceled" for DB compatibility
-      let statusFilter = {};
-      if (status) {
-        const normalizedStatus = status.toLowerCase() === "cancelled" ? "canceled" : status.toLowerCase();
-        statusFilter = { status: normalizedStatus };
-      }
-
-      // Calculate date filters based on status
-      const now = new Date();
+      // Calculate the date from two days before today
       const twoDaysAgo = new Date();
       twoDaysAgo.setDate(twoDaysAgo.getDate() - 2);
       twoDaysAgo.setHours(0, 0, 0, 0); // Set to start of day
 
-      const matchStage: any = {
-        ...matchCondition,
-        ...statusFilter,
-        time_zone: { $exists: true, $ne: null },
-        session_end_time: { $exists: true, $ne: null },
-        session_start_time: { $exists: true, $ne: null },
-      };
-
+      // Handle status filtering
+      let statusFilter = {};
+      let startTimeFilter: any = { $exists: true, $ne: null };
       if (status) {
-        const normalizedStatus = status.toLowerCase() === "cancelled" ? "canceled" : status.toLowerCase();
+        const now = new Date();
         
-        if (normalizedStatus === "completed") {
-          matchStage.start_time = { $exists: true, $ne: null };
-          matchStage.end_time = {
-            $exists: true,
-            $ne: null,
-            $lt: now,
-          };
-          matchStage.booked_date = {
-            $exists: true,
-            $ne: null,
-          };
-        } else if (normalizedStatus === "canceled") {
-          matchStage.start_time = { $exists: true, $ne: null };
-          matchStage.booked_date = {
-            $exists: true,
-            $ne: null,
-            // No lower limit - show all cancelled sessions
-          };
-        } else if (normalizedStatus === "upcoming") {
-          matchStage.start_time = { $exists: true, $ne: null };
-          matchStage.end_time = {
-            $exists: true,
-            $ne: null,
-            $gt: now,
-          };
-          matchStage.booked_date = {
-            $exists: true,
-            $ne: null,
-          };
+        // Map API status values to database status values
+        if (status === "cancelled") {
+          statusFilter = { status: BOOKED_SESSIONS_STATUS.cancel };
+        } else if (status === "completed") {
+          statusFilter = { status: BOOKED_SESSIONS_STATUS.completed };
+        } else if (status === "upcoming") {
+          // Upcoming sessions are confirmed sessions that are scheduled in the future
+          statusFilter = { status: BOOKED_SESSIONS_STATUS.confirm };
+          startTimeFilter = { $exists: true, $ne: null, $gt: now };
         } else {
-          matchStage.start_time = { $exists: true, $ne: null };
-          matchStage.end_time = { $exists: true, $ne: null };
-          matchStage.booked_date = {
-            $exists: true,
-            $ne: null,
-            $gte: twoDaysAgo,
+          // Handle other status values directly (booked, confirmed, etc.)
+          const statusMap = {
+            "booked": BOOKED_SESSIONS_STATUS.BOOKED,
+            "confirmed": BOOKED_SESSIONS_STATUS.confirm,
+            "canceled": BOOKED_SESSIONS_STATUS.cancel,
           };
+          if (statusMap[status]) {
+            statusFilter = { status: statusMap[status] };
+          }
         }
-      } else {
-        matchStage.start_time = { $exists: true, $ne: null };
-        matchStage.end_time = { $exists: true, $ne: null };
-        matchStage.booked_date = {
-          $exists: true,
-          $ne: null,
-          $gte: twoDaysAgo,
-        };
       }
 
       const result = await booked_session
         .aggregate([
           {
-            $match: matchStage,
+            $match: {
+              ...matchCondition,
+              ...statusFilter,
+              time_zone: { $exists: true, $ne: null },
+              start_time: startTimeFilter,
+              end_time: { $exists: true, $ne: null },
+              session_end_time: { $exists: true, $ne: null },
+              session_start_time: { $exists: true, $ne: null },
+              booked_date: { 
+                $exists: true, 
+                $ne: null,
+                $gte: twoDaysAgo 
+              }
+            },
           },
           {
             $lookup: {
