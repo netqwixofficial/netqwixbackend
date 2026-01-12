@@ -432,36 +432,72 @@ export class UserService {
     try {
       let matchCondition = {};
 
-      if (authUser && authUser.account_type === AccountType.TRAINER) {
-        matchCondition = {
-          trainer_id: new Types.ObjectId(authUser._id),
-        };
-      } else {
-        matchCondition = {
-          trainee_id: new Types.ObjectId(authUser._id),
-        };
-      }
+      // Check both trainer_id and trainee_id to handle cases where user might have sessions in both roles
+      // This is more flexible and handles edge cases where account_type might not match the session role
+      const userId = new Types.ObjectId(authUser._id);
+      matchCondition = {
+        $or: [
+          { trainer_id: userId },
+          { trainee_id: userId }
+        ]
+      };
 
-      // Calculate the date from two days before today
+      // Debug logging
+      this.log.debug("getScheduledMeetings - authUser:", {
+        _id: authUser?._id,
+        account_type: authUser?.account_type,
+        status: query?.status,
+        matchCondition
+      });
+
+      // Calculate the date from two days before today (only for upcoming/active sessions)
       const twoDaysAgo = new Date();
       twoDaysAgo.setDate(twoDaysAgo.getDate() - 2);
       twoDaysAgo.setHours(0, 0, 0, 0); // Set to start of day
 
       // Handle status filtering
       let statusFilter = {};
-      let startTimeFilter: any = { $exists: true, $ne: null };
+      let additionalFilters: any = {};
+      let dateFilter: any = { 
+        $exists: true, 
+        $ne: null
+      };
+      
       if (status) {
         const now = new Date();
         
         // Map API status values to database status values
         if (status === "cancelled") {
           statusFilter = { status: BOOKED_SESSIONS_STATUS.cancel };
+          // For cancelled/completed, show all historical data (no date restriction)
+          // Don't apply date filter for historical statuses
         } else if (status === "completed") {
           statusFilter = { status: BOOKED_SESSIONS_STATUS.completed };
+          // For cancelled/completed, show all historical data (no date restriction)
+          // Don't apply date filter for historical statuses
         } else if (status === "upcoming") {
           // Upcoming sessions are confirmed sessions that are scheduled in the future
           statusFilter = { status: BOOKED_SESSIONS_STATUS.confirm };
-          startTimeFilter = { $exists: true, $ne: null, $gt: now };
+          // For upcoming, check if start_time exists and is in future, or booked_date is today or in future
+          const todayStart = new Date();
+          todayStart.setHours(0, 0, 0, 0);
+          additionalFilters = {
+            $or: [
+              { start_time: { $exists: true, $ne: null, $gt: now } },
+              { 
+                $and: [
+                  { $or: [{ start_time: { $exists: false } }, { start_time: null }] },
+                  { booked_date: { $gte: todayStart } }
+                ]
+              }
+            ]
+          };
+          // For upcoming, only show sessions from 2 days ago onwards
+          dateFilter = { 
+            $exists: true, 
+            $ne: null,
+            $gte: twoDaysAgo 
+          };
         } else {
           // Handle other status values directly (booked, confirmed, etc.)
           const statusMap = {
@@ -471,8 +507,21 @@ export class UserService {
           };
           if (statusMap[status]) {
             statusFilter = { status: statusMap[status] };
+            // For active statuses, apply date filter
+            dateFilter = { 
+              $exists: true, 
+              $ne: null,
+              $gte: twoDaysAgo 
+            };
           }
         }
+      } else {
+        // If no status filter, apply date filter for recent sessions
+        dateFilter = { 
+          $exists: true, 
+          $ne: null,
+          $gte: twoDaysAgo 
+        };
       }
 
       const result = await booked_session
@@ -481,16 +530,12 @@ export class UserService {
             $match: {
               ...matchCondition,
               ...statusFilter,
-              time_zone: { $exists: true, $ne: null },
-              start_time: startTimeFilter,
-              end_time: { $exists: true, $ne: null },
+              ...additionalFilters,
+              // Make time_zone, start_time, and end_time optional (these fields may not exist in older records)
+              // Only require session_start_time, session_end_time, and booked_date which are required fields
               session_end_time: { $exists: true, $ne: null },
               session_start_time: { $exists: true, $ne: null },
-              booked_date: { 
-                $exists: true, 
-                $ne: null,
-                $gte: twoDaysAgo 
-              }
+              booked_date: dateFilter
             },
           },
           {
@@ -530,11 +575,13 @@ export class UserService {
           {
             $unwind: {
               path: "$trainer_info",
+              preserveNullAndEmptyArrays: true,
             },
           },
           {
             $unwind: {
               path: "$trainee_info",
+              preserveNullAndEmptyArrays: true,
             },
           },
           {
@@ -568,6 +615,21 @@ export class UserService {
         ])
         .exec();
 
+      // Debug logging
+      this.log.debug("getScheduledMeetings - result count:", result?.length || 0);
+      if (result?.length === 0) {
+        // Try a simpler query to debug
+        const simpleMatch = {
+          ...matchCondition,
+          ...statusFilter,
+          session_end_time: { $exists: true, $ne: null },
+          session_start_time: { $exists: true, $ne: null },
+          booked_date: dateFilter
+        };
+        this.log.debug("getScheduledMeetings - match query:", JSON.stringify(simpleMatch, null, 2));
+        const countResult = await booked_session.countDocuments(simpleMatch);
+        this.log.debug("getScheduledMeetings - countDocuments result:", countResult);
+      }
 
       return ResponseBuilder.data({ data: result }, l10n.t("MEETING_FETCHED"));
     } catch (err) {
