@@ -92,6 +92,15 @@ const bookedSessionsSchema: Schema = new Schema(
     { timestamps: true }
 );
 
+// Add indexes for performance optimization
+bookedSessionsSchema.index({ createdAt: -1 }); // For sorting by creation date
+bookedSessionsSchema.index({ status: 1 }); // For filtering by status
+bookedSessionsSchema.index({ trainer_id: 1 }); // For trainer lookups
+bookedSessionsSchema.index({ trainee_id: 1 }); // For trainee lookups
+bookedSessionsSchema.index({ booked_date: 1 }); // For date filtering
+bookedSessionsSchema.index({ trainer_id: 1, status: 1, booked_date: 1 }); // Compound index for common queries
+bookedSessionsSchema.index({ trainee_id: 1, status: 1, booked_date: 1 }); // Compound index for common queries
+
 const booked_session = Model(
     Tables.booked_sessions,
     bookedSessionsSchema

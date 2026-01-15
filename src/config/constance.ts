@@ -109,6 +109,21 @@ export class EVENTS {
     ON_SEND : 'send',
     ON_RECEIVE : 'receive'
   }
+  public static readonly BOOKING = {
+    CREATED: 'BOOKING_CREATED',
+    STATUS_UPDATED: 'BOOKING_STATUS_UPDATED'
+  }
+  public static readonly INSTANT_LESSON = {
+    REQUEST: 'INSTANT_LESSON_REQUEST',
+    ACCEPT: 'INSTANT_LESSON_ACCEPT',
+    DECLINE: 'INSTANT_LESSON_DECLINE',
+    EXPIRE: 'INSTANT_LESSON_EXPIRE'
+  }
+  public static readonly LESSON_TIMER = {
+    WARNING: 'LESSON_TIME_WARNING',
+    ENDED: 'LESSON_TIME_ENDED',
+    STARTED: 'TIMER_STARTED'
+  }
 }
 export const MONGO_DATE_FORMAT = {
   YYYY_MM_DD: "YYYY-MM-DD",

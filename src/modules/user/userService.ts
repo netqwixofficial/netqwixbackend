@@ -73,6 +73,14 @@ export class UserService {
           { status: payload.booked_status },
           { new: true }
         );
+        
+        // Emit booking status updated event
+        try {
+          const { emitBookingStatusUpdated } = require("../socket/socket.service");
+          await emitBookingStatusUpdated(result);
+        } catch (err) {
+          console.error("[BOOKING] Error emitting booking status updated event:", err);
+        }
         const bookedDate = Utils.formattedDateMonthDateYear(result.booked_date);
         const sessionDuration = Utils.timeDurations(
           result.session_start_time,

@@ -36,6 +36,12 @@ webpush.setVapidDetails(
 );
 
 let activeUsers = {};
+let ioInstance: any = null; // Store io instance for emitting events from services
+
+// Set the io instance (called from socket init)
+export const setIoInstance = (io: any) => {
+  ioInstance = io;
+};
 
 // Lesson session state tracking - backend is authoritative for timer start
 type LessonSessionState = {
@@ -243,31 +249,34 @@ export const handleSocketEvents = (socket, connections = {}) => {
             duration: session.duration,
           };
           
-          console.log(`[TIMER] Both parties joined! Starting timer for session ${sessionId} at ${new Date(session.startedAt).toISOString()}`);
+          console.log(`[TIMER] [${new Date().toISOString()}] Both parties joined! Starting timer for session ${sessionId} at ${new Date(session.startedAt).toISOString()}, duration: ${session.duration}s`);
           
-          socket.nsp.to(roomName).emit("TIMER_STARTED", timerPayload);
+          socket.nsp.to(roomName).emit(EVENTS.LESSON_TIMER.STARTED, timerPayload);
           
           // Schedule warning at 30 seconds remaining
           const totalMs = session.duration * 1000;
           const warningMs = totalMs - 30 * 1000;
           if (warningMs > 0) {
             session.warningTimeoutId = setTimeout(() => {
-              socket.nsp.to(roomName).emit("LESSON_TIME_WARNING", {
+              // Calculate session end time
+              const sessionEndTime = new Date(session.startedAt + totalMs);
+              socket.nsp.to(roomName).emit(EVENTS.LESSON_TIMER.WARNING, {
                 sessionId: session.sessionId,
                 remainingSeconds: 30,
+                sessionEndTime: sessionEndTime.toISOString(),
               });
-              console.log(`[TIMER] Warning: 30 seconds remaining for session ${sessionId}`);
+              console.log(`[TIMER] [${new Date().toISOString()}] Warning: 30 seconds remaining for session ${sessionId} at ${sessionEndTime.toISOString()}`);
             }, warningMs);
           }
           
           // Schedule time ended
           session.endTimeoutId = setTimeout(() => {
-            socket.nsp.to(roomName).emit("LESSON_TIME_ENDED", {
+            const endedAt = new Date(session.startedAt + totalMs);
+            socket.nsp.to(roomName).emit(EVENTS.LESSON_TIMER.ENDED, {
               sessionId: session.sessionId,
-              startedAt: session.startedAt,
-              duration: session.duration,
+              endedAt: endedAt.toISOString(),
             });
-            console.log(`[TIMER] Time ended for session ${sessionId}`);
+            console.log(`[TIMER] [${new Date().toISOString()}] Time ended for session ${sessionId} at ${endedAt.toISOString()}`);
             
             // Clean up
             const current = lessonSessions.get(sessionId);
@@ -300,8 +309,8 @@ export const handleSocketEvents = (socket, connections = {}) => {
           startedAt: session.startedAt,
           duration: session.duration,
         };
-        socket.emit("TIMER_STARTED", timerPayload);
-        console.log(`[TIMER] Sending existing timer state to newly joined party for session ${sessionId}`);
+        socket.emit(EVENTS.LESSON_TIMER.STARTED, timerPayload);
+        console.log(`[TIMER] [${new Date().toISOString()}] Sending existing timer state to newly joined party for session ${sessionId}, started at ${new Date(session.startedAt).toISOString()}`);
       }
     }
     
@@ -394,6 +403,8 @@ export const handleSocketEvents = (socket, connections = {}) => {
   listenLockModeToggle(socket);
   listenVideoChunksEvent(socket);
   listenNotificationEvents(socket);
+  listenInstantLessonEvents(socket);
+  listenBookingEvents(socket);
 };
 
 const listenNotificationEvents = (socket) => {
@@ -446,6 +457,231 @@ const listenNotificationEvents = (socket) => {
   } catch (err) {
     console.error(`Error while listening to notification event:`, err);
     throw err;
+  }
+};
+
+// Instant Lesson Event Handlers
+const listenInstantLessonEvents = (socket) => {
+  try {
+    // Handle instant lesson request
+    socket.on(EVENTS.INSTANT_LESSON.REQUEST, async (payload: any) => {
+      try {
+        const { lessonId, coachId, traineeId, traineeInfo, duration, expiresAt, lessonType } = payload;
+        
+        // Validate required fields
+        if (!lessonId || !coachId || !traineeId) {
+          console.error("[INSTANT_LESSON] Missing required fields in request:", payload);
+          return;
+        }
+
+        const coachSocketId = MemCache.getDetail(process.env.SOCKET_CONFIG, coachId);
+        if (coachSocketId) {
+          socket.to(coachSocketId).emit(EVENTS.INSTANT_LESSON.REQUEST, {
+            lessonId,
+            coachId,
+            traineeId,
+            traineeInfo,
+            duration,
+            expiresAt,
+            lessonType,
+          });
+          console.log(`[INSTANT_LESSON] [${new Date().toISOString()}] Request sent to coach ${coachId} for lesson ${lessonId}, expires at ${expiresAt}`);
+        } else {
+          console.warn(`[INSTANT_LESSON] Coach ${coachId} not connected`);
+        }
+      } catch (err) {
+        console.error(`[INSTANT_LESSON] Error handling request:`, err);
+      }
+    });
+
+    // Handle instant lesson accept
+    socket.on(EVENTS.INSTANT_LESSON.ACCEPT, async (payload: any) => {
+      try {
+        const { lessonId, coachId, traineeId } = payload;
+        
+        if (!lessonId || !coachId || !traineeId) {
+          console.error("[INSTANT_LESSON] Missing required fields in accept:", payload);
+          return;
+        }
+
+        // Emit to both parties
+        const coachSocketId = MemCache.getDetail(process.env.SOCKET_CONFIG, coachId);
+        const traineeSocketId = MemCache.getDetail(process.env.SOCKET_CONFIG, traineeId);
+
+        if (coachSocketId) {
+          socket.to(coachSocketId).emit(EVENTS.INSTANT_LESSON.ACCEPT, {
+            lessonId,
+            coachId,
+            traineeId,
+          });
+        }
+        if (traineeSocketId) {
+          socket.to(traineeSocketId).emit(EVENTS.INSTANT_LESSON.ACCEPT, {
+            lessonId,
+            coachId,
+            traineeId,
+          });
+        }
+
+        console.log(`[INSTANT_LESSON] [${new Date().toISOString()}] Lesson ${lessonId} accepted by coach ${coachId} for trainee ${traineeId}`);
+      } catch (err) {
+        console.error(`[INSTANT_LESSON] Error handling accept:`, err);
+      }
+    });
+
+    // Handle instant lesson decline
+    socket.on(EVENTS.INSTANT_LESSON.DECLINE, async (payload: any) => {
+      try {
+        const { lessonId, coachId, traineeId } = payload;
+        
+        if (!lessonId || !coachId || !traineeId) {
+          console.error("[INSTANT_LESSON] Missing required fields in decline:", payload);
+          return;
+        }
+
+        const traineeSocketId = MemCache.getDetail(process.env.SOCKET_CONFIG, traineeId);
+        if (traineeSocketId) {
+          socket.to(traineeSocketId).emit(EVENTS.INSTANT_LESSON.DECLINE, {
+            lessonId,
+            coachId,
+            traineeId,
+          });
+          console.log(`[INSTANT_LESSON] [${new Date().toISOString()}] Lesson ${lessonId} declined by coach ${coachId} for trainee ${traineeId}`);
+        }
+      } catch (err) {
+        console.error(`[INSTANT_LESSON] Error handling decline:`, err);
+      }
+    });
+
+    // Handle instant lesson expire
+    socket.on(EVENTS.INSTANT_LESSON.EXPIRE, async (payload: any) => {
+      try {
+        const { lessonId, coachId, traineeId } = payload;
+        
+        if (!lessonId) {
+          console.error("[INSTANT_LESSON] Missing lessonId in expire:", payload);
+          return;
+        }
+
+        const coachSocketId = coachId ? MemCache.getDetail(process.env.SOCKET_CONFIG, coachId) : null;
+        const traineeSocketId = traineeId ? MemCache.getDetail(process.env.SOCKET_CONFIG, traineeId) : null;
+
+        if (coachSocketId) {
+          socket.to(coachSocketId).emit(EVENTS.INSTANT_LESSON.EXPIRE, {
+            lessonId,
+            coachId,
+            traineeId,
+          });
+        }
+        if (traineeSocketId) {
+          socket.to(traineeSocketId).emit(EVENTS.INSTANT_LESSON.EXPIRE, {
+            lessonId,
+            coachId,
+            traineeId,
+          });
+        }
+
+        console.log(`[INSTANT_LESSON] [${new Date().toISOString()}] Lesson ${lessonId} expired`);
+      } catch (err) {
+        console.error(`[INSTANT_LESSON] Error handling expire:`, err);
+      }
+    });
+  } catch (err) {
+    console.error(`[INSTANT_LESSON] Error setting up instant lesson event listeners:`, err);
+  }
+};
+
+// Booking Event Handlers
+const listenBookingEvents = (socket) => {
+  try {
+    // This handler is for receiving booking events from other services
+    // The actual emission happens in booking creation/update services
+    socket.on(EVENTS.BOOKING.CREATED, async (payload: any) => {
+      console.log(`[BOOKING] Booking created event received:`, payload);
+    });
+
+    socket.on(EVENTS.BOOKING.STATUS_UPDATED, async (payload: any) => {
+      console.log(`[BOOKING] Booking status updated event received:`, payload);
+    });
+  } catch (err) {
+    console.error(`[BOOKING] Error setting up booking event listeners:`, err);
+  }
+};
+
+// Helper functions to emit booking events from services
+export const emitBookingCreated = async (bookingData: any, bookingType: 'instant' | 'scheduled' = 'scheduled') => {
+  try {
+    if (!ioInstance) {
+      console.warn("[BOOKING] ioInstance not set, cannot emit BOOKING_CREATED event");
+      return;
+    }
+
+    const { _id: bookingId, trainer_id, trainee_id, createdAt } = bookingData;
+    const trainerId = trainer_id?.toString ? trainer_id.toString() : trainer_id;
+    const traineeId = trainee_id?.toString ? trainee_id.toString() : trainee_id;
+
+    const payload = {
+      bookingId: bookingId?.toString ? bookingId.toString() : bookingId,
+      trainerId,
+      traineeId,
+      type: bookingType,
+      createdAt: createdAt || new Date().toISOString(),
+    };
+
+    // Emit to trainer
+    const trainerSocketId = MemCache.getDetail(process.env.SOCKET_CONFIG, trainerId);
+    if (trainerSocketId && ioInstance) {
+      ioInstance.to(trainerSocketId).emit(EVENTS.BOOKING.CREATED, payload);
+      console.log(`[BOOKING] BOOKING_CREATED event emitted to trainer ${trainerId}`);
+    }
+
+    // Emit to trainee
+    const traineeSocketId = MemCache.getDetail(process.env.SOCKET_CONFIG, traineeId);
+    if (traineeSocketId && ioInstance) {
+      ioInstance.to(traineeSocketId).emit(EVENTS.BOOKING.CREATED, payload);
+      console.log(`[BOOKING] BOOKING_CREATED event emitted to trainee ${traineeId}`);
+    }
+
+    console.log(`[BOOKING] [${new Date().toISOString()}] Booking created: ${payload.bookingId}, type: ${bookingType}, trainer: ${trainerId}, trainee: ${traineeId}`);
+  } catch (err) {
+    console.error(`[BOOKING] Error emitting BOOKING_CREATED event:`, err);
+  }
+};
+
+export const emitBookingStatusUpdated = async (bookingData: any) => {
+  try {
+    if (!ioInstance) {
+      console.warn("[BOOKING] ioInstance not set, cannot emit BOOKING_STATUS_UPDATED event");
+      return;
+    }
+
+    const { _id: bookingId, trainer_id, trainee_id, status, updatedAt } = bookingData;
+    const trainerId = trainer_id?.toString ? trainer_id.toString() : trainer_id;
+    const traineeId = trainee_id?.toString ? trainee_id.toString() : trainee_id;
+
+    const payload = {
+      bookingId: bookingId?.toString ? bookingId.toString() : bookingId,
+      status,
+      updatedAt: updatedAt || new Date().toISOString(),
+    };
+
+    // Emit to trainer
+    const trainerSocketId = MemCache.getDetail(process.env.SOCKET_CONFIG, trainerId);
+    if (trainerSocketId && ioInstance) {
+      ioInstance.to(trainerSocketId).emit(EVENTS.BOOKING.STATUS_UPDATED, payload);
+      console.log(`[BOOKING] BOOKING_STATUS_UPDATED event emitted to trainer ${trainerId}`);
+    }
+
+    // Emit to trainee
+    const traineeSocketId = MemCache.getDetail(process.env.SOCKET_CONFIG, traineeId);
+    if (traineeSocketId && ioInstance) {
+      ioInstance.to(traineeSocketId).emit(EVENTS.BOOKING.STATUS_UPDATED, payload);
+      console.log(`[BOOKING] BOOKING_STATUS_UPDATED event emitted to trainee ${traineeId}`);
+    }
+
+    console.log(`[BOOKING] [${new Date().toISOString()}] Booking status updated: ${payload.bookingId}, status: ${status}, trainer: ${trainerId}, trainee: ${traineeId}`);
+  } catch (err) {
+    console.error(`[BOOKING] Error emitting BOOKING_STATUS_UPDATED event:`, err);
   }
 };
 

@@ -1,7 +1,7 @@
 import { Server } from "ws";
 import { log } from "../../../logger";
 import { Events } from "./events";
-import { handleSocketEvents } from "./socket.service";
+import { handleSocketEvents, setIoInstance } from "./socket.service";
 import { EVENTS } from "../../config/constance";
 import { AuthMiddleware } from "../auth/authMiddleware";
 import { MemCache } from "../../Utils/memCache";
@@ -14,6 +14,9 @@ export class SocketInit {
 
 
   public init = (io: Server, app) => {
+    // Set the io instance for use in socket service helpers
+    setIoInstance(io);
+    
     io.use(async (socket, next) => {
       const token = socket.handshake.query.authorization;
       if (token) {

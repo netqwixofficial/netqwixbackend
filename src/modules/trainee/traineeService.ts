@@ -396,6 +396,15 @@ export class TraineeService {
         { _id: payload.trainer_id },
         { $inc: { wallet_amount: +payload.charging_price || 0 } }
       );
+      
+      // Emit booking created event
+      try {
+        const { emitBookingCreated } = require("../socket/socket.service");
+        await emitBookingCreated(bookingData, 'scheduled');
+      } catch (err) {
+        console.error("[BOOKING] Error emitting booking created event:", err);
+      }
+      
       return ResponseBuilder.data(bookingData, l10n.t("SESSION_BOOKED"));
     } catch (err) {
       console.error("Error booking session:", err);
@@ -439,7 +448,15 @@ export class TraineeService {
         session_end_time,
       });
 
-      await userObj.save();
+      const bookingData = await userObj.save();
+      
+      // Emit booking created event for instant lesson
+      try {
+        const { emitBookingCreated } = require("../socket/socket.service");
+        await emitBookingCreated(bookingData, 'instant');
+      } catch (err) {
+        console.error("[BOOKING] Error emitting instant booking created event:", err);
+      }
 
       const trainerDetails = await user
         .findById(trainer_id)
