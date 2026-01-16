@@ -484,8 +484,8 @@ export class UserService {
           // For cancelled/completed, show all historical data (no date restriction)
           // Don't apply date filter for historical statuses
         } else if (status === "upcoming") {
-          // Upcoming sessions are confirmed sessions that are scheduled in the future
-          statusFilter = { status: BOOKED_SESSIONS_STATUS.confirm };
+          // Upcoming sessions are both booked and confirmed sessions that are scheduled in the future
+          statusFilter = { status: { $in: [BOOKED_SESSIONS_STATUS.BOOKED, BOOKED_SESSIONS_STATUS.confirm] } };
           // For upcoming, check if start_time exists and is in future, or booked_date is today or in future
           const todayStart = new Date();
           todayStart.setHours(0, 0, 0, 0);
