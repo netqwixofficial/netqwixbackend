@@ -44,17 +44,192 @@ export const setIoInstance = (io: any) => {
 };
 
 // Lesson session state tracking - backend is authoritative for timer start
+type LessonTimerStatus = "waiting" | "running" | "paused" | "ended";
+
 type LessonSessionState = {
   sessionId: string; // booked_session._id
+  trainerId: string;
+  traineeId: string;
   coachJoined: boolean;
   userJoined: boolean;
-  startedAt: number | null; // unix timestamp (ms) - authoritative backend time
-  duration: number; // in seconds, calculated from session_start_time and session_end_time
+  startedAt: number | null; // unix timestamp (ms) - authoritative backend time for current running segment
+  duration: number; // original total duration in seconds
+  remainingSeconds: number; // remaining seconds as of last (re)start/pause
+  status: LessonTimerStatus;
   warningTimeoutId?: NodeJS.Timeout | null;
   endTimeoutId?: NodeJS.Timeout | null;
 };
 
 const lessonSessions: Map<string, LessonSessionState> = new Map();
+
+// Helper to compute remaining seconds at "now" for a session
+const computeRemainingSeconds = (session: LessonSessionState): number => {
+  if (session.status === "running" && session.startedAt) {
+    const elapsedSeconds = Math.floor((Date.now() - session.startedAt) / 1000);
+    const remaining = session.remainingSeconds - elapsedSeconds;
+    return remaining > 0 ? remaining : 0;
+  }
+  return session.remainingSeconds;
+};
+
+// Emit participant connection status to both trainer and trainee (if connected)
+const emitParticipantStatus = (
+  session: LessonSessionState,
+  role: "trainer" | "trainee",
+  status: "connected" | "disconnected"
+) => {
+  if (!ioInstance) return;
+
+  const payload = {
+    sessionId: session.sessionId,
+    role,
+    status,
+  };
+
+  try {
+    const trainerSocketId = MemCache.getDetail(
+      process.env.SOCKET_CONFIG,
+      session.trainerId
+    );
+    const traineeSocketId = MemCache.getDetail(
+      process.env.SOCKET_CONFIG,
+      session.traineeId
+    );
+
+    if (trainerSocketId) {
+      ioInstance.to(trainerSocketId).emit(
+        EVENTS.LESSON.PARTICIPANT_STATUS_CHANGED,
+        payload
+      );
+    }
+    if (traineeSocketId) {
+      ioInstance.to(traineeSocketId).emit(
+        EVENTS.LESSON.PARTICIPANT_STATUS_CHANGED,
+        payload
+      );
+    }
+  } catch (err) {
+    console.error("[LESSON] Error emitting participant status:", err);
+  }
+};
+
+// Pause timer when trainer disconnects (business rule: trainer disconnect pauses timer)
+const pauseLessonTimer = (
+  sessionId: string,
+  reason: "trainer_disconnected" | "manual" = "trainer_disconnected"
+) => {
+  const session = lessonSessions.get(sessionId);
+  if (!session) return;
+
+  if (session.status !== "running") return;
+
+  const remaining = computeRemainingSeconds(session);
+  session.remainingSeconds = remaining;
+  session.startedAt = null;
+  session.status = remaining > 0 ? "paused" : "ended";
+
+  if (session.warningTimeoutId) {
+    clearTimeout(session.warningTimeoutId);
+    session.warningTimeoutId = null;
+  }
+  if (session.endTimeoutId) {
+    clearTimeout(session.endTimeoutId);
+    session.endTimeoutId = null;
+  }
+
+  const roomName = `session:${sessionId}`;
+
+  if (ioInstance) {
+    if (session.status === "paused") {
+      ioInstance.to(roomName).emit(EVENTS.LESSON_TIMER.PAUSED, {
+        sessionId: session.sessionId,
+        remainingSeconds: session.remainingSeconds,
+        reason,
+      });
+      console.log(
+        `[TIMER] [${new Date().toISOString()}] Timer paused for session ${sessionId}. Remaining: ${session.remainingSeconds}s. Reason: ${reason}`
+      );
+    } else if (session.status === "ended") {
+      ioInstance.to(roomName).emit(EVENTS.LESSON_TIMER.ENDED, {
+        sessionId: session.sessionId,
+      });
+      console.log(
+        `[TIMER] [${new Date().toISOString()}] Timer ended for session ${sessionId} while pausing.`
+      );
+      lessonSessions.delete(sessionId);
+    }
+  }
+};
+
+// Start or resume the timer with current remainingSeconds
+const startLessonTimer = (session: LessonSessionState, namespace) => {
+  const now = Date.now();
+  session.startedAt = now;
+  session.status = "running";
+
+  const roomName = `session:${session.sessionId}`;
+  const totalMs = session.remainingSeconds * 1000;
+  const warningMs = totalMs - 30 * 1000;
+
+  // Emit TIMER_STARTED / LESSON_TIME_RESUMED equivalent
+  const timerPayload = {
+    sessionId: session.sessionId,
+    startedAt: session.startedAt,
+    duration: session.remainingSeconds,
+    remainingSeconds: session.remainingSeconds,
+  };
+
+  namespace.to(roomName).emit(EVENTS.LESSON_TIMER.STARTED, timerPayload);
+  console.log(
+    `[TIMER] [${new Date().toISOString()}] Timer started for session ${
+      session.sessionId
+    } at ${new Date(session.startedAt).toISOString()}, duration: ${
+      session.remainingSeconds
+    }s`
+  );
+
+  // Schedule warning at 30 seconds remaining (only if we have > 30s left)
+  if (warningMs > 0) {
+    session.warningTimeoutId = setTimeout(() => {
+      const sessionEndTime = new Date(
+        (session.startedAt as number) + totalMs
+      );
+      namespace.to(roomName).emit(EVENTS.LESSON_TIMER.WARNING, {
+        sessionId: session.sessionId,
+        remainingSeconds: 30,
+        sessionEndTime: sessionEndTime.toISOString(),
+      });
+      console.log(
+        `[TIMER] [${new Date().toISOString()}] Warning: 30 seconds remaining for session ${
+          session.sessionId
+        } at ${sessionEndTime.toISOString()}`
+      );
+    }, warningMs);
+  }
+
+  // Schedule time ended
+  session.endTimeoutId = setTimeout(() => {
+    session.status = "ended";
+    session.remainingSeconds = 0;
+    const endedAt = new Date((session.startedAt as number) + totalMs);
+    namespace.to(roomName).emit(EVENTS.LESSON_TIMER.ENDED, {
+      sessionId: session.sessionId,
+      endedAt: endedAt.toISOString(),
+    });
+    console.log(
+      `[TIMER] [${new Date().toISOString()}] Time ended for session ${
+        session.sessionId
+      } at ${endedAt.toISOString()}`
+    );
+
+    // Clean up
+    const current = lessonSessions.get(session.sessionId);
+    if (current && current.endTimeoutId === session.endTimeoutId) {
+      if (current.warningTimeoutId) clearTimeout(current.warningTimeoutId);
+      lessonSessions.delete(session.sessionId);
+    }
+  }, totalMs);
+};
 
 // Update user's activity status
 async function updateUserActivity(socket) {
@@ -127,15 +302,21 @@ async function updateUserActivity(socket) {
       }
 
       // Clean up timer state if user disconnects during a session
-      // Reset their join status but don't stop the timer if it's already started
+      // Reset their join status and, if trainer disconnects after start, pause the timer
       const accountType = socket?.user?._doc?.account_type || socket?.user?.account_type;
       for (const [sessionId, session] of lessonSessions.entries()) {
         if (accountType === "Trainer" && session.coachJoined) {
           session.coachJoined = false;
           console.log(`[TIMER] Trainer ${userId} disconnected from session ${sessionId}`);
+          // Pause timer when trainer disconnects and lesson has started
+          if (session.status === "running") {
+            pauseLessonTimer(sessionId, "trainer_disconnected");
+          }
+          emitParticipantStatus(session, "trainer", "disconnected");
         } else if (accountType !== "Trainer" && session.userJoined) {
           session.userJoined = false;
           console.log(`[TIMER] Trainee ${userId} disconnected from session ${sessionId}`);
+          emitParticipantStatus(session, "trainee", "disconnected");
         }
       }
     });
@@ -179,7 +360,7 @@ export const handleSocketEvents = (socket, connections = {}) => {
     if (sessionId && mongoose.isValidObjectId(sessionId)) {
       let session = lessonSessions.get(sessionId);
       if (!session) {
-        // Fetch booked session to get duration
+        // Fetch booked session to get duration & participants
         try {
           const bookedSession = await booked_session.findById(sessionId);
           if (bookedSession) {
@@ -187,27 +368,46 @@ export const handleSocketEvents = (socket, connections = {}) => {
             // Otherwise calculate from session_start_time and session_end_time (string HH:mm)
             let durationSeconds = 30 * 60; // default 30 minutes
             if (bookedSession.start_time && bookedSession.end_time) {
-              durationSeconds = Math.floor((bookedSession.end_time.getTime() - bookedSession.start_time.getTime()) / 1000);
-            } else if (bookedSession.session_start_time && bookedSession.session_end_time) {
+              durationSeconds = Math.floor(
+                (bookedSession.end_time.getTime() - bookedSession.start_time.getTime()) /
+                  1000
+              );
+            } else if (
+              bookedSession.session_start_time &&
+              bookedSession.session_end_time
+            ) {
               // Parse HH:mm strings and calculate duration
-              const [startH, startM] = bookedSession.session_start_time.split(':').map(Number);
-              const [endH, endM] = bookedSession.session_end_time.split(':').map(Number);
+              const [startH, startM] = bookedSession.session_start_time
+                .split(":")
+                .map(Number);
+              const [endH, endM] = bookedSession.session_end_time
+                .split(":")
+                .map(Number);
               const startMinutes = startH * 60 + startM;
               const endMinutes = endH * 60 + endM;
               durationSeconds = (endMinutes - startMinutes) * 60; // convert to seconds
             }
-            
+
+            const initialDuration =
+              durationSeconds > 0 ? durationSeconds : 30 * 60;
+
             session = {
               sessionId,
+              trainerId: bookedSession.trainer_id.toString(),
+              traineeId: bookedSession.trainee_id.toString(),
               coachJoined: false,
               userJoined: false,
               startedAt: null,
-              duration: durationSeconds > 0 ? durationSeconds : 30 * 60,
+              duration: initialDuration,
+              remainingSeconds: initialDuration,
+              status: "waiting",
               warningTimeoutId: null,
               endTimeoutId: null,
             };
             lessonSessions.set(sessionId, session);
-            console.log(`[TIMER] Session ${sessionId} initialized with duration ${session.duration}s`);
+            console.log(
+              `[TIMER] Session ${sessionId} initialized with duration ${session.duration}s`
+            );
           }
         } catch (err) {
           console.error("Error fetching booked session for timer:", err);
@@ -222,69 +422,42 @@ export const handleSocketEvents = (socket, connections = {}) => {
         if (accountType === "Trainer") {
           session.coachJoined = true;
           console.log(`[TIMER] Trainer ${userId} joined session ${sessionId}. Coach joined: ${session.coachJoined}, User joined: ${session.userJoined}`);
+          emitParticipantStatus(session, "trainer", "connected");
         } else {
           session.userJoined = true;
           console.log(`[TIMER] Trainee ${userId} joined session ${sessionId}. Coach joined: ${session.coachJoined}, User joined: ${session.userJoined}`);
+          emitParticipantStatus(session, "trainee", "connected");
         }
         
-        // Check if both parties have joined - if so, start the timer immediately
-        if (session.coachJoined && session.userJoined && session.startedAt === null) {
-          const now = Date.now();
-          session.startedAt = now;
-          
-          const roomName = `session:${sessionId}`;
-          socket.join(roomName);
-          const otherSocketId = MemCache.getDetail(process.env.SOCKET_CONFIG, userInfo?.to_user);
-          if (otherSocketId) {
-            const otherSocket = socket.nsp.sockets.get(otherSocketId);
-            if (otherSocket) {
-              otherSocket.join(roomName);
-            }
+        const roomName = `session:${sessionId}`;
+        socket.join(roomName);
+        const otherSocketId = MemCache.getDetail(
+          process.env.SOCKET_CONFIG,
+          userInfo?.to_user
+        );
+        if (otherSocketId) {
+          const otherSocket = socket.nsp.sockets.get(otherSocketId);
+          if (otherSocket) {
+            otherSocket.join(roomName);
           }
-          
-          // Emit timer start event immediately when both join
-          const timerPayload = {
-            sessionId: session.sessionId,
-            startedAt: session.startedAt,
-            duration: session.duration,
-          };
-          
-          console.log(`[TIMER] [${new Date().toISOString()}] Both parties joined! Starting timer for session ${sessionId} at ${new Date(session.startedAt).toISOString()}, duration: ${session.duration}s`);
-          
-          socket.nsp.to(roomName).emit(EVENTS.LESSON_TIMER.STARTED, timerPayload);
-          
-          // Schedule warning at 30 seconds remaining
-          const totalMs = session.duration * 1000;
-          const warningMs = totalMs - 30 * 1000;
-          if (warningMs > 0) {
-            session.warningTimeoutId = setTimeout(() => {
-              // Calculate session end time
-              const sessionEndTime = new Date(session.startedAt + totalMs);
-              socket.nsp.to(roomName).emit(EVENTS.LESSON_TIMER.WARNING, {
-                sessionId: session.sessionId,
-                remainingSeconds: 30,
-                sessionEndTime: sessionEndTime.toISOString(),
-              });
-              console.log(`[TIMER] [${new Date().toISOString()}] Warning: 30 seconds remaining for session ${sessionId} at ${sessionEndTime.toISOString()}`);
-            }, warningMs);
-          }
-          
-          // Schedule time ended
-          session.endTimeoutId = setTimeout(() => {
-            const endedAt = new Date(session.startedAt + totalMs);
-            socket.nsp.to(roomName).emit(EVENTS.LESSON_TIMER.ENDED, {
-              sessionId: session.sessionId,
-              endedAt: endedAt.toISOString(),
-            });
-            console.log(`[TIMER] [${new Date().toISOString()}] Time ended for session ${sessionId} at ${endedAt.toISOString()}`);
-            
-            // Clean up
-            const current = lessonSessions.get(sessionId);
-            if (current && current.endTimeoutId === session.endTimeoutId) {
-              if (current.warningTimeoutId) clearTimeout(current.warningTimeoutId);
-              lessonSessions.delete(sessionId);
-            }
-          }, totalMs);
+        }
+
+        // If lesson is paused and trainer rejoins with remaining time, resume timer
+        if (
+          accountType === "Trainer" &&
+          session.status === "paused" &&
+          computeRemainingSeconds(session) > 0
+        ) {
+          session.remainingSeconds = computeRemainingSeconds(session);
+          startLessonTimer(session, socket.nsp);
+        } else if (
+          session.coachJoined &&
+          session.userJoined &&
+          session.status === "waiting" &&
+          session.startedAt === null
+        ) {
+          // First time both parties have joined - start the timer
+          startLessonTimer(session, socket.nsp);
         }
       }
     }
@@ -302,15 +475,21 @@ export const handleSocketEvents = (socket, connections = {}) => {
     const sessionId = socketReq?.sessionId || socketReq?.userInfo?.sessionId || socketReq?.userInfo?.meetingId || socketReq?.userInfo?.lessonId;
     if (sessionId && mongoose.isValidObjectId(sessionId)) {
       const session = lessonSessions.get(sessionId);
-      if (session && session.startedAt !== null) {
+      if (session && session.startedAt !== null && session.status === "running") {
         // Timer already started - send current timer state to the joining party
+        const remaining = computeRemainingSeconds(session);
         const timerPayload = {
           sessionId: session.sessionId,
           startedAt: session.startedAt,
-          duration: session.duration,
+          duration: remaining,
+          remainingSeconds: remaining,
         };
         socket.emit(EVENTS.LESSON_TIMER.STARTED, timerPayload);
-        console.log(`[TIMER] [${new Date().toISOString()}] Sending existing timer state to newly joined party for session ${sessionId}, started at ${new Date(session.startedAt).toISOString()}`);
+        console.log(
+          `[TIMER] [${new Date().toISOString()}] Sending existing timer state to newly joined party for session ${sessionId}, started at ${new Date(
+            session.startedAt
+          ).toISOString()}, remaining: ${remaining}s`
+        );
       }
     }
     
@@ -405,6 +584,102 @@ export const handleSocketEvents = (socket, connections = {}) => {
   listenNotificationEvents(socket);
   listenInstantLessonEvents(socket);
   listenBookingEvents(socket);
+  listenLessonStateEvents(socket);
+};
+
+// Lesson state sync for reconnects / refreshes
+// Frontend emits LESSON_STATE_REQUEST with { sessionId }, backend responds with LESSON_STATE_SYNC
+const listenLessonStateEvents = (socket) => {
+  try {
+    socket.on(EVENTS.LESSON.STATE_REQUEST, async (payload: any) => {
+      try {
+        const { sessionId } = payload || {};
+        if (!sessionId || !mongoose.isValidObjectId(sessionId)) {
+          return;
+        }
+
+        let session = lessonSessions.get(sessionId);
+
+        // If we don't have in-memory state yet, initialize from DB (status: waiting)
+        if (!session) {
+          const bookedSession = await booked_session.findById(sessionId);
+          if (!bookedSession) {
+            return;
+          }
+
+          let durationSeconds = 30 * 60;
+          if (bookedSession.start_time && bookedSession.end_time) {
+            durationSeconds = Math.floor(
+              (bookedSession.end_time.getTime() - bookedSession.start_time.getTime()) /
+                1000
+            );
+          } else if (
+            bookedSession.session_start_time &&
+            bookedSession.session_end_time
+          ) {
+            const [startH, startM] = bookedSession.session_start_time
+              .split(":")
+              .map(Number);
+            const [endH, endM] = bookedSession.session_end_time
+              .split(":")
+              .map(Number);
+            const startMinutes = startH * 60 + startM;
+            const endMinutes = endH * 60 + endM;
+            durationSeconds = (endMinutes - startMinutes) * 60;
+          }
+
+          const initialDuration =
+            durationSeconds > 0 ? durationSeconds : 30 * 60;
+
+          session = {
+            sessionId,
+            trainerId: bookedSession.trainer_id.toString(),
+            traineeId: bookedSession.trainee_id.toString(),
+            coachJoined: false,
+            userJoined: false,
+            startedAt: null,
+            duration: initialDuration,
+            remainingSeconds: initialDuration,
+            status: "waiting",
+            warningTimeoutId: null,
+            endTimeoutId: null,
+          };
+          lessonSessions.set(sessionId, session);
+        }
+
+        const remaining = computeRemainingSeconds(session);
+        const status: LessonTimerStatus = session.status;
+
+        const response: any = {
+          sessionId: session.sessionId,
+          status,
+          duration: session.duration,
+          trainerConnected: !!session.coachJoined,
+          traineeConnected: !!session.userJoined,
+        };
+
+        if (status === "running") {
+          response.startedAt = session.startedAt;
+          response.remainingSeconds = remaining;
+        } else if (status === "paused") {
+          response.remainingSeconds = remaining;
+          response.startedAt = null;
+        } else if (status === "waiting") {
+          response.remainingSeconds = session.duration;
+          response.startedAt = null;
+        } else if (status === "ended") {
+          response.remainingSeconds = 0;
+          response.startedAt = null;
+        }
+
+        socket.emit(EVENTS.LESSON.STATE_SYNC, response);
+      } catch (err) {
+        console.error("[LESSON] Error handling LESSON_STATE_REQUEST:", err);
+      }
+    });
+  } catch (err) {
+    console.error("[LESSON] Error setting up lesson state events:", err);
+  }
 };
 
 const listenNotificationEvents = (socket) => {
