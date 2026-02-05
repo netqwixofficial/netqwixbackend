@@ -620,12 +620,26 @@ export const emitBookingCreated = async (bookingData: any, bookingType: 'instant
     const trainerId = trainer_id?.toString ? trainer_id.toString() : trainer_id;
     const traineeId = trainee_id?.toString ? trainee_id.toString() : trainee_id;
 
+
+    const startTimeUtc =
+      bookingData?.start_time ? new Date(bookingData.start_time).toISOString() : null;
+    const endTimeUtc =
+      bookingData?.end_time ? new Date(bookingData.end_time).toISOString() : null;
+    const bookedDateUtc =
+      bookingData?.booked_date ? new Date(bookingData.booked_date).toISOString() : null;
+    const bookingTimeZone = bookingData?.time_zone || null;
+
     const payload = {
       bookingId: bookingId?.toString ? bookingId.toString() : bookingId,
       trainerId,
       traineeId,
       type: bookingType,
       createdAt: createdAt || new Date().toISOString(),
+      // Time information – always UTC + original logical time zone
+      startTimeUtc,
+      endTimeUtc,
+      bookedDateUtc,
+      bookingTimeZone,
     };
 
     // Emit to trainer
