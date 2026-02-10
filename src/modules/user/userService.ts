@@ -484,17 +484,37 @@ export class UserService {
           // For cancelled/completed, show all historical data (no date restriction)
           // Don't apply date filter for historical statuses
         } else if (status === "upcoming") {
-          // Upcoming sessions are both booked and confirmed sessions that are scheduled in the future
+          // Upcoming sessions are both booked and confirmed sessions that haven't ended yet
           statusFilter = { status: { $in: [BOOKED_SESSIONS_STATUS.BOOKED, BOOKED_SESSIONS_STATUS.confirm] } };
-          // For upcoming, check if start_time exists and is in future, or booked_date is today or in future
+          // For upcoming, check if session hasn't ended yet
+          // Priority: extended_end_time > end_time > start_time > booked_date
           const todayStart = new Date();
           todayStart.setHours(0, 0, 0, 0);
           additionalFilters = {
             $or: [
-              { start_time: { $exists: true, $ne: null, $gt: now } },
+              // Sessions with extended_end_time - must not have ended yet
+              { extended_end_time: { $exists: true, $ne: null, $gt: now } },
+              // Sessions with end_time but no extended_end_time - must not have ended yet
+              {
+                $and: [
+                  { $or: [{ extended_end_time: { $exists: false } }, { extended_end_time: null }] },
+                  { end_time: { $exists: true, $ne: null, $gt: now } }
+                ]
+              },
+              // Sessions with start_time but no end_time/extended_end_time - must not have started yet
+              {
+                $and: [
+                  { start_time: { $exists: true, $ne: null, $gt: now } },
+                  { $or: [{ extended_end_time: { $exists: false } }, { extended_end_time: null }] },
+                  { $or: [{ end_time: { $exists: false } }, { end_time: null }] }
+                ]
+              },
+              // Sessions without start_time/end_time - check booked_date is today or future
               { 
                 $and: [
                   { $or: [{ start_time: { $exists: false } }, { start_time: null }] },
+                  { $or: [{ end_time: { $exists: false } }, { end_time: null }] },
+                  { $or: [{ extended_end_time: { $exists: false } }, { extended_end_time: null }] },
                   { booked_date: { $gte: todayStart } }
                 ]
               }
