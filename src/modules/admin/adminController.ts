@@ -83,7 +83,7 @@ export class AdminController {
       return res.status(500).json({
         status: CONSTANCE.FAIL,
         error: "Failed to fetch call diagnostics",
-        code: CONSTANCE.RES_CODE.error.serverError,
+        code: CONSTANCE.RES_CODE.error.internalServerError,
       });
     }
   };
@@ -148,7 +148,7 @@ export class AdminController {
       return res.status(500).json({
         status: CONSTANCE.FAIL,
         error: "Failed to fetch call quality summary",
-        code: CONSTANCE.RES_CODE.error.serverError,
+        code: CONSTANCE.RES_CODE.error.internalServerError,
       });
     }
   };
