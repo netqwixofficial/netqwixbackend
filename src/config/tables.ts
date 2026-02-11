@@ -11,6 +11,7 @@ export class Tables {
   public static readonly admin_setting = "admin_setting";
   public static readonly write_us = "write_us";
   public static readonly raise_concern = "raise_concern";
-  public static readonly online_user = "online_user";
-  public static readonly notifications = "notifications";
+    public static readonly online_user = "online_user";
+    public static readonly notifications = "notifications";
+    public static readonly call_diagnostics = "call_diagnostics";
 }

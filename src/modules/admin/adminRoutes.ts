@@ -16,5 +16,7 @@ route.use([
 
 route.post("/update-global-commission", adminController.updateGlobalCommission);
 route.get("/get-global-commission", adminController.getGlobalCommission);
+route.get("/call-diagnostics", adminController.getCallDiagnostics);
+route.get("/call-quality-summary/:sessionId", adminController.getCallQualitySummary);
 
 export const adminRoute: Router = route;

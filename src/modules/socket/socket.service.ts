@@ -8,6 +8,7 @@ const axios = require("axios");
 import savedSession from "../../model/saved_sessions.schema";
 import * as AWS from "aws-sdk";
 import onlineUser from "../../model/online_user.schema";
+import CallDiagnostics from "../../model/call_diagnostics.schema";
 import * as webpush from "web-push";
 import notification from "../../model/notifications.schema";
 import user from "../../model/user.schema";
@@ -41,6 +42,35 @@ let ioInstance: any = null; // Store io instance for emitting events from servic
 // Set the io instance (called from socket init)
 export const setIoInstance = (io: any) => {
   ioInstance = io;
+  
+  // Start periodic heartbeat check to detect stale connections
+  setInterval(() => {
+    const now = Date.now();
+    const staleSockets: string[] = [];
+    
+    socketHeartbeats.forEach((lastHeartbeat, socketId) => {
+      if (now - lastHeartbeat > HEARTBEAT_TIMEOUT_MS) {
+        staleSockets.push(socketId);
+      }
+    });
+    
+    // Clean up stale sockets and notify peers if needed
+    staleSockets.forEach((socketId) => {
+      socketHeartbeats.delete(socketId);
+      const staleSocket = io.sockets.sockets.get(socketId);
+      if (staleSocket) {
+        // Notify peers in the same room that this socket is stale
+        staleSocket.rooms.forEach((roomName) => {
+          if (roomName.startsWith("session:")) {
+            staleSocket.to(roomName).emit("PARTICIPANT_STALE", {
+              socketId,
+              timestamp: now,
+            });
+          }
+        });
+      }
+    });
+  }, 10000); // Check every 10 seconds
 };
 
 // Lesson session state tracking - backend is authoritative for timer start
@@ -152,10 +182,164 @@ async function updateUserActivity(socket) {
 
 }
 
+// Track heartbeat timestamps per socket for presence detection
+const socketHeartbeats: Map<string, number> = new Map();
+const HEARTBEAT_TIMEOUT_MS = 30000;
+
 export const handleSocketEvents = (socket, connections = {}) => {
+  const socketId = socket.id;
+  
+  // Initialize heartbeat tracking for this socket
+  socketHeartbeats.set(socketId, Date.now());
+
+  // Cleanup heartbeat tracking on disconnect
+  socket.on("disconnect", () => {
+    socketHeartbeats.delete(socketId);
+  });
+
+  // Heartbeat handler: clients send this periodically to prove they're alive
+  socket.on("HEARTBEAT", () => {
+    socketHeartbeats.set(socketId, Date.now());
+  });
+
   socket.on(EVENTS.JOIN_ROOM, async (socketReq, request) => {
     const { roomName } = socketReq;
     handleRoomJoinEvent(roomName);
+  });
+
+  // Step 1 diagnostics: collect client environment info for calls.
+  // This helps us understand real-world browser / device / network mix
+  // before we change core call behavior.
+  socket.on("CLIENT_CALL_DIAGNOSTICS", async (payload) => {
+    try {
+      const userId = socket?.user?._doc?._id || socket?.user?._id;
+      const accountType =
+        socket?.user?._doc?.account_type || socket?.user?.account_type;
+
+      const { sessionId, role, env } = payload || {};
+
+      console.log("[CallDiagnostics] Client diagnostics received:", {
+        userId,
+        accountType,
+        sessionId,
+        role,
+        env,
+      });
+
+      // Save to database for analytics
+      if (sessionId && userId) {
+        try {
+          await CallDiagnostics.create({
+            sessionId,
+            userId,
+            accountType,
+            role,
+            eventType: "CLIENT_CALL_DIAGNOSTICS",
+            env,
+          });
+        } catch (dbErr) {
+          console.error("[CallDiagnostics] Failed to save to DB:", dbErr);
+        }
+      }
+    } catch (err) {
+      console.error(
+        "[CallDiagnostics] Failed to process CLIENT_CALL_DIAGNOSTICS:",
+        err
+      );
+    }
+  });
+
+  // Pre-call compatibility & environment result logging.
+  // This captures why a user could or could not proceed to a call.
+  socket.on("CLIENT_PRECALL_CHECK", async (payload) => {
+    try {
+      const userId = socket?.user?._doc?._id || socket?.user?._id;
+      const accountType =
+        socket?.user?._doc?.account_type || socket?.user?.account_type;
+
+      const { sessionId, role, passed, reason } = payload || {};
+
+      console.log("[PreCallCheck] Result:", {
+        userId,
+        accountType,
+        sessionId,
+        role,
+        passed,
+        reason,
+      });
+
+      // Save to database for analytics
+      if (sessionId && userId) {
+        try {
+          await CallDiagnostics.create({
+            sessionId,
+            userId,
+            accountType,
+            role,
+            eventType: "CLIENT_PRECALL_CHECK",
+            preflightCheck: {
+              passed,
+              reason,
+            },
+          });
+        } catch (dbErr) {
+          console.error("[PreCallCheck] Failed to save to DB:", dbErr);
+        }
+      }
+    } catch (err) {
+      console.error(
+        "[PreCallCheck] Failed to process CLIENT_PRECALL_CHECK:",
+        err
+      );
+    }
+  });
+
+  // Connection quality stats from WebRTC calls
+  socket.on("CALL_QUALITY_STATS", async (payload) => {
+    try {
+      const userId = socket?.user?._doc?._id || socket?.user?._id;
+      const accountType =
+        socket?.user?._doc?.account_type || socket?.user?.account_type;
+
+      const { sessionId, role, stats } = payload || {};
+
+      // Log quality metrics for monitoring
+      if (stats?.quality) {
+        console.log("[CallQuality] Stats:", {
+          userId,
+          accountType,
+          sessionId,
+          role,
+          overallScore: stats.quality.overallScore,
+          audioScore: stats.quality.audioScore,
+          videoScore: stats.quality.videoScore,
+          rtt: stats.quality.rtt,
+          usingRelay: stats.quality.usingRelay,
+          timestamp: stats.timestamp,
+        });
+
+        // Save to database for analytics (only sample every 5th report to avoid DB overload)
+        if (sessionId && userId && Math.random() < 0.2) {
+          try {
+            await CallDiagnostics.create({
+              sessionId,
+              userId,
+              accountType,
+              role,
+              eventType: "CALL_QUALITY_STATS",
+              qualityStats: stats,
+            });
+          } catch (dbErr) {
+            console.error("[CallQuality] Failed to save to DB:", dbErr);
+          }
+        }
+      }
+    } catch (err) {
+      console.error(
+        "[CallQuality] Failed to process CALL_QUALITY_STATS:",
+        err
+      );
+    }
   });
 
   socket.on(EVENTS.VIDEO_CALL.ON_OFFER, ({ offer, userInfo }) => {
