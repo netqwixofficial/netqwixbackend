@@ -301,6 +301,18 @@ export function isOverlap(slot1, slot2) {
 export async function getIceServerCredentials() {
   const TURN_KEY_ID = process.env.TURN_KEY_ID; // Your TURN key ID
   const TURN_KEY_API_TOKEN = process.env.TURN_KEY_API_TOKEN; // Your API token
+  
+  // Fallback STUN servers for maximum compatibility
+  const fallbackStunServers = [
+    { urls: 'stun:stun.cloudflare.com:3478' },
+    { urls: 'stun:stun.cloudflare.com:53' },
+    { urls: 'stun:stun.l.google.com:19302' },
+    { urls: 'stun:stun1.l.google.com:19302' },
+    { urls: 'stun:stun2.l.google.com:19302' },
+    { urls: 'stun:stun3.l.google.com:19302' },
+    { urls: 'stun:stun4.l.google.com:19302' },
+  ];
+
   try {
     // Call Cloudflare API to generate TURN credentials
     const response = await axios.post(
@@ -311,6 +323,7 @@ export async function getIceServerCredentials() {
           Authorization: `Bearer ${TURN_KEY_API_TOKEN}`,
           'Content-Type': 'application/json',
         },
+        timeout: 10000, // 10 second timeout
       }
     );
 
@@ -319,38 +332,40 @@ export async function getIceServerCredentials() {
 
     console.log("iceServers", iceServers)
 
-    const formattedIceServers = [
-      { urls: iceServers.urls[0] },
-      { urls: iceServers.urls[1] },
-      {
-        urls: iceServers.urls[2], username: iceServers.username,
-        credential: iceServers.credential,
-      },
-      {
-        urls: iceServers.urls[3], username: iceServers.username,
-        credential: iceServers.credential,
-      },
-      {
-        urls: iceServers.urls[4], username: iceServers.username,
-        credential: iceServers.credential,
-      },
-      {
-        urls: iceServers.urls[5], username: iceServers.username,
-        credential: iceServers.credential,
-      },
-      {
-        urls: iceServers.urls[6], username: iceServers.username,
-        credential: iceServers.credential,
-      },
-      {
-        urls: iceServers.urls[7], username: iceServers.username,
-        credential: iceServers.credential,
-      }
-    ];
+    // Build formatted ICE servers with TURN servers
+    const formattedIceServers = [];
+    
+    // Add STUN servers first (for NAT traversal)
+    if (iceServers.urls && Array.isArray(iceServers.urls)) {
+      iceServers.urls.forEach((url, index) => {
+        if (index < 2) {
+          // First two are usually STUN servers
+          formattedIceServers.push({ urls: url });
+        } else if (iceServers.username && iceServers.credential) {
+          // Rest are TURN servers with credentials
+          formattedIceServers.push({
+            urls: url,
+            username: iceServers.username,
+            credential: iceServers.credential,
+          });
+        }
+      });
+    }
+    
+    // Add fallback STUN servers if we don't have enough
+    if (formattedIceServers.length < 3) {
+      formattedIceServers.push(...fallbackStunServers);
+    }
+    
     // Return the iceServers in the response
     return formattedIceServers;
 
   } catch (error) {
     console.error('Error generating TURN credentials:', error.response?.data || error.message);
+    console.warn('Using fallback STUN servers only');
+    
+    // Return fallback STUN servers if TURN server fails
+    // This ensures basic connectivity even if TURN is unavailable
+    return fallbackStunServers;
   }
 }

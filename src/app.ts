@@ -45,13 +45,17 @@ export class App {
     cronjobs();
     const io = socketio(server, {
       maxHttpBufferSize: 1e8,
+      transports: ['websocket', 'polling'], // Explicitly allow both transports
+      allowEIO3: true, // Allow Engine.IO v3 clients
       cors: {
         origin: "*",
         // or with an array of origins
         // origin: ["https://netquix-ui.vercel.app", "https://hwus.us", "http://localhost:3000"],
         methods: ["*"],
-        // credentials: true,
+        credentials: true, // Enable credentials for WebSocket
       },
+      pingTimeout: 60000, // Increase ping timeout
+      pingInterval: 25000, // Increase ping interval
     });
     this.socketEvents.init(io, this.app);
 

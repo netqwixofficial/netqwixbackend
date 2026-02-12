@@ -490,27 +490,37 @@ export class UserService {
           // Priority: extended_end_time > end_time > start_time > booked_date
           const todayStart = new Date();
           todayStart.setHours(0, 0, 0, 0);
+          
+          // Filter to only include sessions that haven't ended
+          // Check in priority order: extended_end_time > end_time > start_time > booked_date
           additionalFilters = {
             $or: [
-              // Sessions with extended_end_time - must not have ended yet
-              { extended_end_time: { $exists: true, $ne: null, $gt: now } },
-              // Sessions with end_time but no extended_end_time - must not have ended yet
+              // Case 1: Has extended_end_time - must be in the future
+              {
+                $and: [
+                  { extended_end_time: { $exists: true, $ne: null } },
+                  { extended_end_time: { $gt: now } }
+                ]
+              },
+              // Case 2: Has end_time but no extended_end_time - end_time must be in the future
               {
                 $and: [
                   { $or: [{ extended_end_time: { $exists: false } }, { extended_end_time: null }] },
-                  { end_time: { $exists: true, $ne: null, $gt: now } }
+                  { end_time: { $exists: true, $ne: null } },
+                  { end_time: { $gt: now } }
                 ]
               },
-              // Sessions with start_time but no end_time/extended_end_time - must not have started yet
+              // Case 3: Has start_time but no end_time/extended_end_time - start_time must be in the future
               {
                 $and: [
-                  { start_time: { $exists: true, $ne: null, $gt: now } },
                   { $or: [{ extended_end_time: { $exists: false } }, { extended_end_time: null }] },
-                  { $or: [{ end_time: { $exists: false } }, { end_time: null }] }
+                  { $or: [{ end_time: { $exists: false } }, { end_time: null }] },
+                  { start_time: { $exists: true, $ne: null } },
+                  { start_time: { $gt: now } }
                 ]
               },
-              // Sessions without start_time/end_time - check booked_date is today or future
-              { 
+              // Case 4: No time fields - booked_date must be today or future
+              {
                 $and: [
                   { $or: [{ start_time: { $exists: false } }, { start_time: null }] },
                   { $or: [{ end_time: { $exists: false } }, { end_time: null }] },
@@ -520,6 +530,7 @@ export class UserService {
               }
             ]
           };
+          
           // For upcoming, only show sessions from 2 days ago onwards
           dateFilter = { 
             $exists: true, 

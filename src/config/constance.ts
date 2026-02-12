@@ -103,6 +103,7 @@ export class EVENTS {
     STOP_FEED: "STOP_FEED",
     ON_CALL_JOIN: "ON_CALL_JOIN",  
     ON_BOTH_JOIN: "ON_BOTH_JOIN",
+    ON_CALL_LEAVE: "ON_CALL_LEAVE",
 
   };
   public static readonly PUSH_NOTIFICATIONS = {

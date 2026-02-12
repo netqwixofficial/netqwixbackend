@@ -195,6 +195,38 @@ export const handleSocketEvents = (socket, connections = {}) => {
   // Cleanup heartbeat tracking on disconnect
   socket.on("disconnect", () => {
     socketHeartbeats.delete(socketId);
+    
+    // Notify all rooms this socket was in that the user disconnected
+    const accountType = socket?.user?._doc?.account_type || socket?.user?.account_type;
+    const userId = socket?.user?._doc?._id || socket?.user?._id;
+    
+    // Find all session rooms this socket was in
+    socket.rooms.forEach((roomName) => {
+      if (roomName.startsWith("session:")) {
+        const sessionId = roomName.replace("session:", "");
+        const session = lessonSessions.get(sessionId);
+        
+        if (session) {
+          // Update join status
+          if (accountType === "Trainer") {
+            session.coachJoined = false;
+            console.log(`[SESSION] Trainer ${userId} disconnected from session ${sessionId}`);
+          } else {
+            session.userJoined = false;
+            console.log(`[SESSION] Trainee ${userId} disconnected from session ${sessionId}`);
+          }
+          
+          // Notify other party in the room
+          socket.to(roomName).emit(EVENTS.VIDEO_CALL.ON_CALL_LEAVE, {
+            userId,
+            accountType,
+            sessionId,
+            timestamp: Date.now()
+          });
+          console.log(`[SESSION] Notified room ${roomName} that ${userId} (${accountType}) disconnected`);
+        }
+      }
+    });
   });
 
   // Heartbeat handler: clients send this periodically to prove they're alive
@@ -360,7 +392,15 @@ export const handleSocketEvents = (socket, connections = {}) => {
     
     // Track join state for timer logic - sessionId is booked_session._id
     const sessionId = userInfo?.sessionId || userInfo?.meetingId || userInfo?.lessonId;
+    const accountType = socket?.user?._doc?.account_type || socket?.user?.account_type;
+    const userId = socket?.user?._doc?._id || socket?.user?._id;
+    
     if (sessionId && mongoose.isValidObjectId(sessionId)) {
+      // Join the room immediately when user joins (don't wait for both parties)
+      const roomName = `session:${sessionId}`;
+      socket.join(roomName);
+      console.log(`[SESSION] User ${userId} (${accountType}) joined room ${roomName} for session ${sessionId}`);
+      
       let session = lessonSessions.get(sessionId);
       if (!session) {
         // Fetch booked session to get duration
@@ -400,8 +440,8 @@ export const handleSocketEvents = (socket, connections = {}) => {
       
       if (session) {
         // Determine if this is coach (Trainer) or user (Trainee) based on account_type
-        const accountType = socket?.user?._doc?.account_type || socket?.user?.account_type;
-        const userId = socket?.user?._doc?._id || socket?.user?._id;
+        const wasCoachJoined = session.coachJoined;
+        const wasUserJoined = session.userJoined;
         
         if (accountType === "Trainer") {
           session.coachJoined = true;
@@ -411,20 +451,29 @@ export const handleSocketEvents = (socket, connections = {}) => {
           console.log(`[TIMER] Trainee ${userId} joined session ${sessionId}. Coach joined: ${session.coachJoined}, User joined: ${session.userJoined}`);
         }
         
+        // Notify the other party that someone joined (if they're connected)
+        const otherSocketId = MemCache.getDetail(process.env.SOCKET_CONFIG, userInfo?.to_user);
+        if (otherSocketId) {
+          const otherSocket = socket.nsp.sockets.get(otherSocketId);
+          if (otherSocket) {
+            // Ensure other party is also in the room
+            otherSocket.join(roomName);
+            // Notify them that this party joined
+            otherSocket.emit(EVENTS.VIDEO_CALL.ON_CALL_JOIN, { 
+              userInfo: {
+                ...userInfo,
+                joinedUserId: userId,
+                accountType: accountType
+              }
+            });
+            console.log(`[SESSION] Notified other party ${userInfo?.to_user} that ${userId} (${accountType}) joined session ${sessionId}`);
+          }
+        }
+        
         // Check if both parties have joined - if so, start the timer immediately
         if (session.coachJoined && session.userJoined && session.startedAt === null) {
           const now = Date.now();
           session.startedAt = now;
-          
-          const roomName = `session:${sessionId}`;
-          socket.join(roomName);
-          const otherSocketId = MemCache.getDetail(process.env.SOCKET_CONFIG, userInfo?.to_user);
-          if (otherSocketId) {
-            const otherSocket = socket.nsp.sockets.get(otherSocketId);
-            if (otherSocket) {
-              otherSocket.join(roomName);
-            }
-          }
           
           // Emit timer start event immediately when both join
           const timerPayload = {
@@ -473,7 +522,10 @@ export const handleSocketEvents = (socket, connections = {}) => {
       }
     }
     
-    socket.to(toUserId).emit(EVENTS.VIDEO_CALL.ON_CALL_JOIN, { userInfo });
+    // Also emit to the specific user (for backward compatibility)
+    if (toUserId) {
+      socket.to(toUserId).emit(EVENTS.VIDEO_CALL.ON_CALL_JOIN, { userInfo });
+    }
   });
 
   socket.on(EVENTS.VIDEO_CALL.ON_BOTH_JOIN, async (socketReq) => {
