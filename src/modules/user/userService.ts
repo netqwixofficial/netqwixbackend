@@ -459,9 +459,10 @@ export class UserService {
       });
 
       // Calculate the date from two days before today (only for upcoming/active sessions)
+      // Use UTC to ensure consistent comparison with UTC dates in database
       const twoDaysAgo = new Date();
-      twoDaysAgo.setDate(twoDaysAgo.getDate() - 2);
-      twoDaysAgo.setHours(0, 0, 0, 0); // Set to start of day
+      twoDaysAgo.setUTCDate(twoDaysAgo.getUTCDate() - 2);
+      twoDaysAgo.setUTCHours(0, 0, 0, 0); // Set to start of day in UTC
 
       // Handle status filtering
       let statusFilter = {};
@@ -472,6 +473,7 @@ export class UserService {
       };
       
       if (status) {
+        // Use UTC time for consistent comparison with UTC dates in database
         const now = new Date();
         
         // Map API status values to database status values
@@ -488,38 +490,42 @@ export class UserService {
           statusFilter = { status: { $in: [BOOKED_SESSIONS_STATUS.BOOKED, BOOKED_SESSIONS_STATUS.confirm] } };
           // For upcoming, check if session hasn't ended yet
           // Priority: extended_end_time > end_time > start_time > booked_date
+          // Use UTC to ensure consistent comparison with UTC dates in database
           const todayStart = new Date();
-          todayStart.setHours(0, 0, 0, 0);
+          todayStart.setUTCHours(0, 0, 0, 0);
+          
+          // Use UTC time for consistent comparison with UTC dates in database
+          const nowUTC = new Date();
           
           // Filter to only include sessions that haven't ended
           // Check in priority order: extended_end_time > end_time > start_time > booked_date
           additionalFilters = {
             $or: [
-              // Case 1: Has extended_end_time - must be in the future
+              // Case 1: Has extended_end_time - must be in the future (UTC comparison)
               {
                 $and: [
                   { extended_end_time: { $exists: true, $ne: null } },
-                  { extended_end_time: { $gt: now } }
+                  { extended_end_time: { $gt: nowUTC } }
                 ]
               },
-              // Case 2: Has end_time but no extended_end_time - end_time must be in the future
+              // Case 2: Has end_time but no extended_end_time - end_time must be in the future (UTC comparison)
               {
                 $and: [
                   { $or: [{ extended_end_time: { $exists: false } }, { extended_end_time: null }] },
                   { end_time: { $exists: true, $ne: null } },
-                  { end_time: { $gt: now } }
+                  { end_time: { $gt: nowUTC } }
                 ]
               },
-              // Case 3: Has start_time but no end_time/extended_end_time - start_time must be in the future
+              // Case 3: Has start_time but no end_time/extended_end_time - start_time must be in the future (UTC comparison)
               {
                 $and: [
                   { $or: [{ extended_end_time: { $exists: false } }, { extended_end_time: null }] },
                   { $or: [{ end_time: { $exists: false } }, { end_time: null }] },
                   { start_time: { $exists: true, $ne: null } },
-                  { start_time: { $gt: now } }
+                  { start_time: { $gt: nowUTC } }
                 ]
               },
-              // Case 4: No time fields - booked_date must be today or future
+              // Case 4: No time fields - booked_date must be today or future (UTC comparison)
               {
                 $and: [
                   { $or: [{ start_time: { $exists: false } }, { start_time: null }] },
@@ -555,11 +561,11 @@ export class UserService {
           }
         }
       } else {
-        // If no status filter, apply date filter for recent sessions
+        // If no status filter, show all sessions (no date restriction)
+        // This ensures trainees see all their bookings regardless of date
         dateFilter = { 
           $exists: true, 
-          $ne: null,
-          $gte: twoDaysAgo 
+          $ne: null
         };
       }
 
