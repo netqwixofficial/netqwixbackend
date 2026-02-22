@@ -514,13 +514,13 @@ export class UserService {
                   { $or: [{ end_time: { $exists: false } }, { end_time: null }] }
                 ]
               },
-              // Sessions without start_time/end_time (e.g. instant lessons) - booked_date today or future (match eca895d)
+              // Sessions without start_time/end_time (e.g. instant lessons) - from 2 days ago so they always show in Upcoming for both trainer and trainee
               {
                 $and: [
                   { $or: [{ start_time: { $exists: false } }, { start_time: null }] },
                   { $or: [{ end_time: { $exists: false } }, { end_time: null }] },
                   { $or: [{ extended_end_time: { $exists: false } }, { extended_end_time: null }] },
-                  { booked_date: { $gte: todayStart } }
+                  { booked_date: { $gte: twoDaysAgo } }
                 ]
               }
             ]
