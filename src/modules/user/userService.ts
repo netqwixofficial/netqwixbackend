@@ -98,10 +98,17 @@ export class UserService {
           const trainerName = trainerInfo.fullname;
           if (traineeInfo.notifications.transactional.email) {
             const meetingLink = process.env.FRONTEND_URL_SMS + "/meeting?id=" + result._id;
-            const startTime = DateTime.fromJSDate(result.start_time, { zone: 'utc' })
-            const trainerFormattedTime = `${startTime.toFormat("EEEE, MMMM d'th' h:mm a")} ${timeZoneAbbreviations[result.time_zone] || result.time_zone}`
+            let trainerFormattedTime = `${bookedDate} ${sessionDuration}`;
+            if (result.start_time) {
+              try {
+                const startTime = DateTime.fromJSDate(result.start_time, { zone: 'utc' });
+                trainerFormattedTime = `${startTime.toFormat("EEEE, MMMM d'th' h:mm a")} ${timeZoneAbbreviations[result.time_zone] || result.time_zone || ''}`;
+              } catch (_) {
+                // keep fallback
+              }
+            }
 
-            if (payload.booked_status === "confirmed") {
+            if (payload.booked_status === "confirmed" || payload.booked_status === BOOKED_SESSIONS_STATUS.confirm) {
               SendEmail.sendRawEmail(
                 "session-confirmation",
                 {
@@ -525,13 +532,13 @@ export class UserService {
                   { start_time: { $gt: nowUTC } }
                 ]
               },
-              // Case 4: No time fields - booked_date must be today or future (UTC comparison)
+              // Case 4: No time fields - booked_date from 2 days ago onward (cross-timezone: "today" for one user may be yesterday in UTC)
               {
                 $and: [
                   { $or: [{ start_time: { $exists: false } }, { start_time: null }] },
                   { $or: [{ end_time: { $exists: false } }, { end_time: null }] },
                   { $or: [{ extended_end_time: { $exists: false } }, { extended_end_time: null }] },
-                  { booked_date: { $gte: todayStart } }
+                  { booked_date: { $gte: twoDaysAgo } }
                 ]
               }
             ]
