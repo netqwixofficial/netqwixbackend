@@ -492,7 +492,6 @@ export class UserService {
           // Don't apply date filter for historical statuses
         } else if (status === "upcoming") {
           // Upcoming sessions are both booked and confirmed sessions that haven't ended yet
-          // Reverted to pre-0b5d725 logic so instant lessons (no start_time/end_time) show in Upcoming
           statusFilter = { status: { $in: [BOOKED_SESSIONS_STATUS.BOOKED, BOOKED_SESSIONS_STATUS.confirm] } };
           const todayStart = new Date();
           todayStart.setHours(0, 0, 0, 0);
@@ -515,13 +514,13 @@ export class UserService {
                   { $or: [{ end_time: { $exists: false } }, { end_time: null }] }
                 ]
               },
-              // Sessions without start_time/end_time (e.g. instant lessons) - from 2 days ago so cross-timezone "today" still shows
+              // Sessions without start_time/end_time (e.g. instant lessons) - booked_date today or future (match eca895d)
               {
                 $and: [
                   { $or: [{ start_time: { $exists: false } }, { start_time: null }] },
                   { $or: [{ end_time: { $exists: false } }, { end_time: null }] },
                   { $or: [{ extended_end_time: { $exists: false } }, { extended_end_time: null }] },
-                  { booked_date: { $gte: twoDaysAgo } }
+                  { booked_date: { $gte: todayStart } }
                 ]
               }
             ]
