@@ -466,10 +466,9 @@ export class UserService {
       });
 
       // Calculate the date from two days before today (only for upcoming/active sessions)
-      // Use UTC to ensure consistent comparison with UTC dates in database
       const twoDaysAgo = new Date();
-      twoDaysAgo.setUTCDate(twoDaysAgo.getUTCDate() - 2);
-      twoDaysAgo.setUTCHours(0, 0, 0, 0); // Set to start of day in UTC
+      twoDaysAgo.setDate(twoDaysAgo.getDate() - 2);
+      twoDaysAgo.setHours(0, 0, 0, 0);
 
       // Handle status filtering
       let statusFilter = {};
@@ -480,7 +479,6 @@ export class UserService {
       };
       
       if (status) {
-        // Use UTC time for consistent comparison with UTC dates in database
         const now = new Date();
         
         // Map API status values to database status values
@@ -494,45 +492,30 @@ export class UserService {
           // Don't apply date filter for historical statuses
         } else if (status === "upcoming") {
           // Upcoming sessions are both booked and confirmed sessions that haven't ended yet
+          // Reverted to pre-0b5d725 logic so instant lessons (no start_time/end_time) show in Upcoming
           statusFilter = { status: { $in: [BOOKED_SESSIONS_STATUS.BOOKED, BOOKED_SESSIONS_STATUS.confirm] } };
-          // For upcoming, check if session hasn't ended yet
-          // Priority: extended_end_time > end_time > start_time > booked_date
-          // Use UTC to ensure consistent comparison with UTC dates in database
           const todayStart = new Date();
-          todayStart.setUTCHours(0, 0, 0, 0);
-          
-          // Use UTC time for consistent comparison with UTC dates in database
-          const nowUTC = new Date();
-          
-          // Filter to only include sessions that haven't ended
-          // Check in priority order: extended_end_time > end_time > start_time > booked_date
+          todayStart.setHours(0, 0, 0, 0);
           additionalFilters = {
             $or: [
-              // Case 1: Has extended_end_time - must be in the future (UTC comparison)
-              {
-                $and: [
-                  { extended_end_time: { $exists: true, $ne: null } },
-                  { extended_end_time: { $gt: nowUTC } }
-                ]
-              },
-              // Case 2: Has end_time but no extended_end_time - end_time must be in the future (UTC comparison)
+              // Sessions with extended_end_time - must not have ended yet
+              { extended_end_time: { $exists: true, $ne: null, $gt: now } },
+              // Sessions with end_time but no extended_end_time - must not have ended yet
               {
                 $and: [
                   { $or: [{ extended_end_time: { $exists: false } }, { extended_end_time: null }] },
-                  { end_time: { $exists: true, $ne: null } },
-                  { end_time: { $gt: nowUTC } }
+                  { end_time: { $exists: true, $ne: null, $gt: now } }
                 ]
               },
-              // Case 3: Has start_time but no end_time/extended_end_time - start_time must be in the future (UTC comparison)
+              // Sessions with start_time but no end_time/extended_end_time - must not have started yet
               {
                 $and: [
+                  { start_time: { $exists: true, $ne: null, $gt: now } },
                   { $or: [{ extended_end_time: { $exists: false } }, { extended_end_time: null }] },
-                  { $or: [{ end_time: { $exists: false } }, { end_time: null }] },
-                  { start_time: { $exists: true, $ne: null } },
-                  { start_time: { $gt: nowUTC } }
+                  { $or: [{ end_time: { $exists: false } }, { end_time: null }] }
                 ]
               },
-              // Case 4: No time fields - booked_date from 2 days ago onward (cross-timezone: "today" for one user may be yesterday in UTC)
+              // Sessions without start_time/end_time (e.g. instant lessons) - from 2 days ago so cross-timezone "today" still shows
               {
                 $and: [
                   { $or: [{ start_time: { $exists: false } }, { start_time: null }] },
@@ -543,7 +526,6 @@ export class UserService {
               }
             ]
           };
-          
           // For upcoming, only show sessions from 2 days ago onwards
           dateFilter = { 
             $exists: true, 
