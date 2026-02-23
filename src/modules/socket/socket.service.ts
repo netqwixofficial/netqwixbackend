@@ -529,6 +529,18 @@ export const handleSocketEvents = (socket, connections = {}) => {
             }
           }, totalMs);
         }
+
+        // If timer already started (e.g. user reconnected or joined after the other party),
+        // send current timer state to this socket so the UI can show the countdown.
+        if (session.startedAt != null) {
+          const timerPayload = {
+            sessionId: session.sessionId,
+            startedAt: session.startedAt,
+            duration: session.duration,
+          };
+          socket.emit(EVENTS.LESSON_TIMER.STARTED, timerPayload);
+          console.log(`[TIMER] [${new Date().toISOString()}] Sent existing timer state to joining/reconnecting user for session ${sessionId}`);
+        }
       }
     }
     
