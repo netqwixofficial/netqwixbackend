@@ -465,10 +465,11 @@ export class UserService {
         matchCondition
       });
 
-      // Calculate the date from two days before today (only for upcoming/active sessions)
+      // Calculate the date from two days before today in UTC (only for upcoming/active sessions)
+      // Use UTC-based calculations so comparisons against UTC-stored dates (booked_date) are consistent
       const twoDaysAgo = new Date();
-      twoDaysAgo.setDate(twoDaysAgo.getDate() - 2);
-      twoDaysAgo.setHours(0, 0, 0, 0);
+      twoDaysAgo.setUTCDate(twoDaysAgo.getUTCDate() - 2);
+      twoDaysAgo.setUTCHours(0, 0, 0, 0);
 
       // Handle status filtering
       let statusFilter = {};
