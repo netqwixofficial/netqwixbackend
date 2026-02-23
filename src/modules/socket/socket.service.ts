@@ -484,7 +484,13 @@ export const handleSocketEvents = (socket, connections = {}) => {
           
           console.log(`[TIMER] [${new Date().toISOString()}] Both parties joined! Starting timer for session ${sessionId} at ${new Date(session.startedAt).toISOString()}, duration: ${session.duration}s`);
           
-          socket.nsp.to(roomName).emit(EVENTS.LESSON_TIMER.STARTED, timerPayload);
+          // Emit to entire room (use ioInstance so both users receive; socket.nsp.to can exclude sender in some setups)
+          if (ioInstance) {
+            ioInstance.to(roomName).emit(EVENTS.LESSON_TIMER.STARTED, timerPayload);
+          } else {
+            socket.nsp.to(roomName).emit(EVENTS.LESSON_TIMER.STARTED, timerPayload);
+          }
+          socket.emit(EVENTS.LESSON_TIMER.STARTED, timerPayload);
           
           // Schedule warning at 30 seconds remaining
           const totalMs = session.duration * 1000;
@@ -493,11 +499,13 @@ export const handleSocketEvents = (socket, connections = {}) => {
             session.warningTimeoutId = setTimeout(() => {
               // Calculate session end time
               const sessionEndTime = new Date(session.startedAt + totalMs);
-              socket.nsp.to(roomName).emit(EVENTS.LESSON_TIMER.WARNING, {
+              const warningPayload = {
                 sessionId: session.sessionId,
                 remainingSeconds: 30,
                 sessionEndTime: sessionEndTime.toISOString(),
-              });
+              };
+              if (ioInstance) ioInstance.to(roomName).emit(EVENTS.LESSON_TIMER.WARNING, warningPayload);
+              else socket.nsp.to(roomName).emit(EVENTS.LESSON_TIMER.WARNING, warningPayload);
               console.log(`[TIMER] [${new Date().toISOString()}] Warning: 30 seconds remaining for session ${sessionId} at ${sessionEndTime.toISOString()}`);
             }, warningMs);
           }
@@ -505,10 +513,12 @@ export const handleSocketEvents = (socket, connections = {}) => {
           // Schedule time ended
           session.endTimeoutId = setTimeout(() => {
             const endedAt = new Date(session.startedAt + totalMs);
-            socket.nsp.to(roomName).emit(EVENTS.LESSON_TIMER.ENDED, {
+            const endedPayload = {
               sessionId: session.sessionId,
               endedAt: endedAt.toISOString(),
-            });
+            };
+            if (ioInstance) ioInstance.to(roomName).emit(EVENTS.LESSON_TIMER.ENDED, endedPayload);
+            else socket.nsp.to(roomName).emit(EVENTS.LESSON_TIMER.ENDED, endedPayload);
             console.log(`[TIMER] [${new Date().toISOString()}] Time ended for session ${sessionId} at ${endedAt.toISOString()}`);
             
             // Clean up
