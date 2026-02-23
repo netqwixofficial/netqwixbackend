@@ -492,45 +492,29 @@ export class UserService {
           // For cancelled/completed, show all historical data (no date restriction)
           // Don't apply date filter for historical statuses
         } else if (status === "upcoming") {
-          // Upcoming sessions are both booked and confirmed sessions that haven't ended yet
-          statusFilter = { status: { $in: [BOOKED_SESSIONS_STATUS.BOOKED, BOOKED_SESSIONS_STATUS.confirm] } };
-          const todayStart = new Date();
-          todayStart.setHours(0, 0, 0, 0);
-          additionalFilters = {
-            $or: [
-              // Sessions with extended_end_time - must not have ended yet
-              { extended_end_time: { $exists: true, $ne: null, $gt: now } },
-              // Sessions with end_time but no extended_end_time - must not have ended yet
-              {
-                $and: [
-                  { $or: [{ extended_end_time: { $exists: false } }, { extended_end_time: null }] },
-                  { end_time: { $exists: true, $ne: null, $gt: now } }
-                ]
-              },
-              // Sessions with start_time but no end_time/extended_end_time - must not have started yet
-              {
-                $and: [
-                  { start_time: { $exists: true, $ne: null, $gt: now } },
-                  { $or: [{ extended_end_time: { $exists: false } }, { extended_end_time: null }] },
-                  { $or: [{ end_time: { $exists: false } }, { end_time: null }] }
-                ]
-              },
-              // Sessions without start_time/end_time (e.g. instant lessons) - from 2 days ago so they always show in Upcoming for both trainer and trainee
-              {
-                $and: [
-                  { $or: [{ start_time: { $exists: false } }, { start_time: null }] },
-                  { $or: [{ end_time: { $exists: false } }, { end_time: null }] },
-                  { $or: [{ extended_end_time: { $exists: false } }, { extended_end_time: null }] },
-                  { booked_date: { $gte: twoDaysAgo } }
-                ]
-              }
-            ]
+          /**
+           * Upcoming sessions:
+           * - Backend returns all booked/confirmed sessions from the last 2 days
+           *   (based on booked_date) for both trainer and trainee.
+           * - Frontend `getScheduledMeetingDetails` already applies a robust,
+           *   timezone-safe filter using raw `start_time` / `end_time` to decide
+           *   what is truly "upcoming".
+           *
+           * To avoid double-filtering and brittle time comparisons across
+           * timezones, we keep the backend simple here and let the frontend
+           * own the final upcoming logic.
+           */
+          statusFilter = {
+            status: {
+              $in: [BOOKED_SESSIONS_STATUS.BOOKED, BOOKED_SESSIONS_STATUS.confirm],
+            },
           };
-          // For upcoming, only show sessions from 2 days ago onwards
-          dateFilter = { 
-            $exists: true, 
+          additionalFilters = {}; // Rely on frontend time-based filtering for "upcoming"
+          // For upcoming, only show sessions from 2 days ago onwards by booked_date
+          dateFilter = {
+            $exists: true,
             $ne: null,
-            $gte: twoDaysAgo 
+            $gte: twoDaysAgo,
           };
         } else {
           // Handle other status values directly (booked, confirmed, etc.)
