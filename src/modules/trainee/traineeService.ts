@@ -444,13 +444,14 @@ export class TraineeService {
 
       const session_end_time = DateFormat.addMinutes(
         booked_date,
-        30,
+        120,
         CONSTANCE.INSTANT_MEETING_TIME_FORMAT
       );
 
-      // Set start_time/end_time (Date) so getScheduledMeetings and frontend display correctly
+      // Set start_time/end_time (Date) so getScheduledMeetings and frontend display correctly.
+      // 2-hour window so trainer has time to click Start regardless of timezone.
       const start_time = new Date(booked_date);
-      const end_time = new Date(start_time.getTime() + 30 * 60 * 1000);
+      const end_time = new Date(start_time.getTime() + 120 * 60 * 1000);
 
       const userObj = new booked_session({
         trainer_id,
