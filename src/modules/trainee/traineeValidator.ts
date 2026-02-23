@@ -83,9 +83,10 @@ export class bookInstantMeetingModal extends model {
   @IsString()
   public trainer_id: string;
 
-  @IsNotEmpty()
+  /** Optional. If omitted, server uses UTC "now" so instant lesson is timezone/schedule independent. */
+  @IsOptional()
   @IsDateString()
-  public booked_date: Date;
+  public booked_date?: Date;
 
   constructor(body) {
     super();

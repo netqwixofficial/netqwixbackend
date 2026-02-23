@@ -421,23 +421,36 @@ export class TraineeService {
     }
   }
 
+  /**
+   * Book an instant meeting. Does not depend on trainer schedule or timezone.
+   * Uses server UTC "now" so the trainee can request at any time and the trainer
+   * receives the request in upcoming lessons regardless of timezone.
+   */
   public async bookInstantMeeting(
     payload: bookInstantMeetingModal,
     _id: string
   ): Promise<ResponseBuilder> {
-    const { trainer_id, booked_date } = payload;
+    const { trainer_id } = payload;
     try {
+      // Use server UTC "now" so instant lesson works for any trainee/trainer timezone
+      const nowUtc = new Date();
+      const booked_date = payload.booked_date ? new Date(payload.booked_date) : nowUtc;
+
       const session_start_time = DateFormat.addMinutes(
         booked_date,
-        10,
+        0,
         CONSTANCE.INSTANT_MEETING_TIME_FORMAT
       );
 
       const session_end_time = DateFormat.addMinutes(
         booked_date,
-        40,
+        30,
         CONSTANCE.INSTANT_MEETING_TIME_FORMAT
       );
+
+      // Set start_time/end_time (Date) so getScheduledMeetings and frontend display correctly
+      const start_time = new Date(booked_date);
+      const end_time = new Date(start_time.getTime() + 30 * 60 * 1000);
 
       const userObj = new booked_session({
         trainer_id,
@@ -446,14 +459,16 @@ export class TraineeService {
         booked_date,
         session_start_time,
         session_end_time,
+        start_time,
+        end_time,
       });
 
       const bookingData = await userObj.save();
-      
-      // Emit booking created event for instant lesson
+
+      // Emit booking created event for instant lesson (trainer sees in upcoming / gets popup)
       try {
         const { emitBookingCreated } = require("../socket/socket.service");
-        await emitBookingCreated(bookingData, 'instant');
+        await emitBookingCreated(bookingData, "instant");
       } catch (err) {
         console.error("[BOOKING] Error emitting instant booking created event:", err);
       }
@@ -461,9 +476,7 @@ export class TraineeService {
       const trainerDetails = await user
         .findById(trainer_id)
         .select({ _id: 0, fullname: 1, email: 1 });
-      if (trainerDetails.notifications.transactional.email) {
-
-
+      if (trainerDetails?.notifications?.transactional?.email) {
         SendEmail.sendRawEmail(
           "meeting",
           {
@@ -474,7 +487,12 @@ export class TraineeService {
           "Instant Meeting"
         );
       }
-      return ResponseBuilder.data({}, l10n.t("INSTANT_MEETING_BOOKED"));
+
+      // Return booking id so frontend can use it as lessonId for socket INSTANT_LESSON.REQUEST
+      return ResponseBuilder.data(
+        { bookingId: bookingData._id, booking: bookingData },
+        l10n.t("INSTANT_MEETING_BOOKED")
+      );
     } catch (err) {
       return ResponseBuilder.error(err, l10n.t("ERR_INTERNAL_SERVER"));
     }
