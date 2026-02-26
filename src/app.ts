@@ -34,11 +34,9 @@ export class App {
           "Origin",
           "Accept",
         ],
-        // NOTE: Do NOT set credentials: true with origin "*"
-        // or browsers will reject the CORS response.
+
       })
     );
-    // Ensure preflight requests also get CORS headers
     this.app.options("*", cors());
     this.app.use(bodyParser.json({ limit: '50mb' }));
     this.app.use(bodyParser.urlencoded({ limit: '50mb', extended: true }));
