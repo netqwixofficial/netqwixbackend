@@ -22,13 +22,24 @@ export class App {
     this.app.use("/public/assets", express.static("uploads"));
     const route = new Routes();
     this.app.use(bodyParser.json());
-    // this.app.use(cors());
-    this.app.use(cors({
-      origin: "*",
-      methods: ["GET", "POST", "DELETE", "UPDATE", "PUT", "PATCH"],
-      credentials: true,
-      // allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'device-remember-token', 'Access-Control-Allow-Origin', 'Origin', 'Accept']
-    })); 
+    // Global CORS configuration for REST API
+    this.app.use(
+      cors({
+        origin: "*",
+        methods: ["GET", "POST", "DELETE", "PUT", "PATCH", "OPTIONS"],
+        allowedHeaders: [
+          "Content-Type",
+          "Authorization",
+          "X-Requested-With",
+          "Origin",
+          "Accept",
+        ],
+        // NOTE: Do NOT set credentials: true with origin "*"
+        // or browsers will reject the CORS response.
+      })
+    );
+    // Ensure preflight requests also get CORS headers
+    this.app.options("*", cors());
     this.app.use(bodyParser.json({ limit: '50mb' }));
     this.app.use(bodyParser.urlencoded({ limit: '50mb', extended: true }));
     this.app.use("/", route.routePath());
