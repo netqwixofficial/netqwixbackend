@@ -33,8 +33,10 @@ export class App {
           "X-Requested-With",
           "Origin",
           "Accept",
+          // Frontend currently (incorrectly) sends this as a request header.
+          // Including it here allows preflight to succeed without breaking clients.
+          "Access-Control-Allow-Origin",
         ],
-
       })
     );
     this.app.options("*", cors());
