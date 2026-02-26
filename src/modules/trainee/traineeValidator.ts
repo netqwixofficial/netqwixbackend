@@ -88,11 +88,23 @@ export class bookInstantMeetingModal extends model {
   @IsDateString()
   public booked_date?: Date;
 
+  /** Lesson duration in minutes (e.g. 15, 30, 60, 120). Default 30. */
+  @IsOptional()
+  @IsNumber()
+  public duration?: number;
+
+  /** Optional promo/coupon code. */
+  @IsOptional()
+  @IsString()
+  public coupon_code?: string;
+
   constructor(body) {
     super();
-    const { trainer_id, booked_date } = body;
+    const { trainer_id, booked_date, duration, coupon_code } = body;
     this.trainer_id = trainer_id;
     this.booked_date = booked_date;
+    this.duration = duration;
+    this.coupon_code = coupon_code;
   }
 }
 

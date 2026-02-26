@@ -844,6 +844,43 @@ const listenInstantLessonEvents = (socket) => {
         console.error(`[INSTANT_LESSON] Error handling expire:`, err);
       }
     });
+
+    // Handle instant lesson clips selected (trainee saved clips and is joining)
+    socket.on(EVENTS.INSTANT_LESSON.CLIPS_SELECTED, async (payload: any) => {
+      try {
+        const { lessonId, coachId, traineeId } = payload;
+        if (!lessonId || !coachId) {
+          console.error("[INSTANT_LESSON] Missing required fields in clips_selected:", payload);
+          return;
+        }
+        const coachSocketId = MemCache.getDetail(process.env.SOCKET_CONFIG, coachId);
+        if (coachSocketId) {
+          socket.to(coachSocketId).emit(EVENTS.INSTANT_LESSON.CLIPS_SELECTED, {
+            lessonId,
+            coachId,
+            traineeId,
+          });
+          console.log(`[INSTANT_LESSON] [${new Date().toISOString()}] Clips selected for lesson ${lessonId}, coach ${coachId} notified`);
+        }
+      } catch (err) {
+        console.error(`[INSTANT_LESSON] Error handling clips_selected:`, err);
+      }
+    });
+
+    // Handle trainee cancelled (trainee closed/cancelled before coach responded)
+    socket.on(EVENTS.INSTANT_LESSON.TRAINEE_CANCELLED, async (payload: any) => {
+      try {
+        const { lessonId, coachId, traineeId } = payload;
+        if (!lessonId || !coachId) return;
+        const coachSocketId = MemCache.getDetail(process.env.SOCKET_CONFIG, coachId);
+        if (coachSocketId) {
+          socket.to(coachSocketId).emit(EVENTS.INSTANT_LESSON.TRAINEE_CANCELLED, { lessonId, coachId, traineeId });
+          console.log(`[INSTANT_LESSON] [${new Date().toISOString()}] Lesson ${lessonId} cancelled by trainee ${traineeId}`);
+        }
+      } catch (err) {
+        console.error(`[INSTANT_LESSON] Error handling trainee_cancelled:`, err);
+      }
+    });
   } catch (err) {
     console.error(`[INSTANT_LESSON] Error setting up instant lesson event listeners:`, err);
   }

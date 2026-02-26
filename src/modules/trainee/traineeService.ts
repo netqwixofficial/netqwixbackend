@@ -430,11 +430,16 @@ export class TraineeService {
     payload: bookInstantMeetingModal,
     _id: string
   ): Promise<ResponseBuilder> {
-    const { trainer_id } = payload;
+    const { trainer_id, duration: durationMinutes } = payload;
     try {
       // Use server UTC "now" so instant lesson works for any trainee/trainer timezone
       const nowUtc = new Date();
       const booked_date = payload.booked_date ? new Date(payload.booked_date) : nowUtc;
+
+      // Duration in minutes (15, 30, 60, 120). Default 30.
+      const duration = durationMinutes && [15, 30, 60, 120].includes(Number(durationMinutes))
+        ? Number(durationMinutes)
+        : 30;
 
       const session_start_time = DateFormat.addMinutes(
         booked_date,
@@ -444,12 +449,12 @@ export class TraineeService {
 
       const session_end_time = DateFormat.addMinutes(
         booked_date,
-        120,
+        duration,
         CONSTANCE.INSTANT_MEETING_TIME_FORMAT
       );
 
       // Set start_time/end_time (Date) so getScheduledMeetings and frontend display correctly.
-      // 2-hour window so trainer has time to click Start regardless of timezone.
+      // 2-hour window so trainer has time to accept and both can join; lesson length is duration minutes.
       const start_time = new Date(booked_date);
       const end_time = new Date(start_time.getTime() + 120 * 60 * 1000);
 
