@@ -453,10 +453,10 @@ export class TraineeService {
         CONSTANCE.INSTANT_MEETING_TIME_FORMAT
       );
 
-      // Set start_time/end_time (Date) so getScheduledMeetings and frontend display correctly.
-      // 2-hour window so trainer has time to accept and both can join; lesson length is duration minutes.
+      // Set start_time/end_time (Date) so getScheduledMeetings, active sessions, and timers
+      // match the selected instant-lesson duration window.
       const start_time = new Date(booked_date);
-      const end_time = new Date(start_time.getTime() + 120 * 60 * 1000);
+      const end_time = new Date(start_time.getTime() + duration * 60 * 1000);
 
       const userObj = new booked_session({
         trainer_id,
