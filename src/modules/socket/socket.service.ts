@@ -474,12 +474,15 @@ export const handleSocketEvents = (socket, connections = {}) => {
         if (session.coachJoined && session.userJoined && session.startedAt === null) {
           const now = Date.now();
           session.startedAt = now;
-          
-          // Emit timer start event immediately when both join
+
+          // Emit timer start event immediately when both join.
+          // Include remainingSeconds so frontend UIs don't depend on local clock
+          // skew when starting the countdown.
           const timerPayload = {
             sessionId: session.sessionId,
             startedAt: session.startedAt,
             duration: session.duration,
+            remainingSeconds: session.duration,
           };
           
           console.log(`[TIMER] [${new Date().toISOString()}] Both parties joined! Starting timer for session ${sessionId} at ${new Date(session.startedAt).toISOString()}, duration: ${session.duration}s`);
@@ -531,12 +534,16 @@ export const handleSocketEvents = (socket, connections = {}) => {
         }
 
         // If timer already started (e.g. user reconnected or joined after the other party),
-        // send current timer state to this socket so the UI can show the countdown.
+        // send current timer state (including remainingSeconds) to this socket so the UI
+        // can show an accurate countdown without depending on the client's clock.
         if (session.startedAt != null) {
+          const elapsedSeconds = Math.floor((Date.now() - session.startedAt) / 1000);
+          const remainingSeconds = Math.max(0, session.duration - elapsedSeconds);
           const timerPayload = {
             sessionId: session.sessionId,
             startedAt: session.startedAt,
             duration: session.duration,
+            remainingSeconds,
           };
           socket.emit(EVENTS.LESSON_TIMER.STARTED, timerPayload);
           console.log(`[TIMER] [${new Date().toISOString()}] Sent existing timer state to joining/reconnecting user for session ${sessionId}`);
@@ -556,16 +563,20 @@ export const handleSocketEvents = (socket, connections = {}) => {
       socketReq.userInfo?.to_user
     );
     
-    // Check if timer has already started - if so, send timer info to the newly joined party
+    // Check if timer has already started - if so, send current timer info (including
+    // remainingSeconds) to the newly joined party so their UI is in sync.
     const sessionId = socketReq?.sessionId || socketReq?.userInfo?.sessionId || socketReq?.userInfo?.meetingId || socketReq?.userInfo?.lessonId;
     if (sessionId && mongoose.isValidObjectId(sessionId)) {
       const session = lessonSessions.get(sessionId);
       if (session && session.startedAt !== null) {
         // Timer already started - send current timer state to the joining party
+        const elapsedSeconds = Math.floor((Date.now() - session.startedAt) / 1000);
+        const remainingSeconds = Math.max(0, session.duration - elapsedSeconds);
         const timerPayload = {
           sessionId: session.sessionId,
           startedAt: session.startedAt,
           duration: session.duration,
+          remainingSeconds,
         };
         socket.emit(EVENTS.LESSON_TIMER.STARTED, timerPayload);
         console.log(`[TIMER] [${new Date().toISOString()}] Sending existing timer state to newly joined party for session ${sessionId}, started at ${new Date(session.startedAt).toISOString()}`);
