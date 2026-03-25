@@ -484,7 +484,14 @@ export const handleSocketEvents = (socket, connections = {}) => {
               const [startH, startM] = bookedSession.session_start_time.split(':').map(Number);
               const [endH, endM] = bookedSession.session_end_time.split(':').map(Number);
               const startMinutes = startH * 60 + startM;
-              const endMinutes = endH * 60 + endM;
+              let endMinutes = endH * 60 + endM;
+
+              // If the end time is "earlier" than start time, assume it crosses midnight.
+              // This preserves the exact booked window duration rather than falling back.
+              if (endMinutes < startMinutes) {
+                endMinutes += 24 * 60;
+              }
+
               durationSeconds = (endMinutes - startMinutes) * 60; // convert to seconds
             }
             
