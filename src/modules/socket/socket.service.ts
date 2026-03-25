@@ -1271,12 +1271,22 @@ const listenVideoPositionEvent = (socket) => {
 const listenShowVideoEvent = (socket) => {
   try {
     socket.on(EVENTS.ON_VIDEO_SELECT, async (socketReq, request) => {
-      const { userInfo } = socketReq;
-      const toUserSocketId = MemCache.getDetail(
-        process.env.SOCKET_CONFIG,
-        userInfo?.to_user
-      );
-      socket.to(toUserSocketId).emit(EVENTS.ON_VIDEO_SELECT, socketReq);
+      const { userInfo, sessionId } = socketReq || {};
+
+      // Prefer session room broadcast so updates reach the peer even if the
+      // userId->socketId mapping is stale (reconnects, multi-device, etc).
+      if (sessionId && mongoose.isValidObjectId(sessionId)) {
+        const roomName = `session:${sessionId}`;
+        socket.to(roomName).emit(EVENTS.ON_VIDEO_SELECT, socketReq);
+      } else {
+        const toUserSocketId = MemCache.getDetail(
+          process.env.SOCKET_CONFIG,
+          userInfo?.to_user
+        );
+        if (toUserSocketId) {
+          socket.to(toUserSocketId).emit(EVENTS.ON_VIDEO_SELECT, socketReq);
+        }
+      }
     });
   } catch (err) {
     console.error(`Error while listening to show video event:`, err);
