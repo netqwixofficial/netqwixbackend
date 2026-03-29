@@ -75,7 +75,7 @@ const processBookedSessions = async (
     },
   ];
   const matchedSessions = await booked_session.aggregate(pipeline);
-  // sendSessionReminderEmails(matchedSessions);
+  sendSessionReminderEmails(matchedSessions);
 };
 
 const sendSessionReminderEmails = (matchedSessions: any[]) => {
@@ -91,29 +91,55 @@ const sendSessionReminderEmails = (matchedSessions: any[]) => {
     const trainees = userDetails.filter((user) =>
       user.account_type.includes(AccountType.Trainee)
     );
-    trainees.forEach((traineeUser) => {
-      const { email, fullname,notifications } = traineeUser;
-      if(notifications.promotional.email){
-      SendEmail.sendRawEmail(
-        null,
-        null,
-        [email],
-        `REMINDER: Your NetQwix Training Session Starts in ${SessionReminderMinutes.FIFTEEN} minutes at ${bookedTime}`,
-        null,
-        `<div style="font-family: Verdana,Arial,Helvetica,sans-serif;font-size: 18px;line-height: 30px;">
-      <i  style='color:#ff0000'>${fullname},</i>
+    const trainers = userDetails.filter((user) =>
+      user.account_type.includes(AccountType.Trainer)
+    );
+    const reminderHtml = (name: string, roleLine: string) =>
+      `<div style="font-family: Verdana,Arial,Helvetica,sans-serif;font-size: 18px;line-height: 30px;">
+      <i style='color:#ff0000'>${name},</i>
       <br/><br/>
-      This is your ${SessionReminderMinutes.FIFTEEN} minute reminder that your Training Session will begin in ${SessionReminderMinutes.FIFTEEN} minutes.
-      ${formateBookedDate} ${bookedTime} EST
+      ${roleLine}
+      ${formateBookedDate} ${bookedTime}
       <br/><br/>
       Team NetQwix recommends logging in 2-5 minutes prior to your scheduled session.<br/><br/>
-      Thank You For Booking the Slot in NetQwix.
+      Thank you for using NetQwix.
       <br/><br/>
-      From,  <br/>
-      NetQwix Team. <br/>
+      From,<br/>
+      NetQwix Team.<br/>
       <img src=${NetquixImage.logo} style="object-fit: contain; width: 180px;"/>
-       </div> `
-      );}
+       </div>`;
+
+    trainees.forEach((traineeUser) => {
+      const { email, fullname, notifications } = traineeUser;
+      if (notifications?.promotional?.email !== false) {
+        SendEmail.sendRawEmail(
+          null,
+          null,
+          [email],
+          `REMINDER: Your NetQwix Training Session Starts in ${SessionReminderMinutes.FIFTEEN} minutes at ${bookedTime}`,
+          null,
+          reminderHtml(
+            fullname,
+            `This is your ${SessionReminderMinutes.FIFTEEN} minute reminder that your training session will begin in ${SessionReminderMinutes.FIFTEEN} minutes.`
+          )
+        );
+      }
+    });
+    trainers.forEach((trainerUser) => {
+      const { email, fullname, notifications } = trainerUser;
+      if (notifications?.promotional?.email !== false) {
+        SendEmail.sendRawEmail(
+          null,
+          null,
+          [email],
+          `REMINDER: Your NetQwix Training Session Starts in ${SessionReminderMinutes.FIFTEEN} minutes at ${bookedTime}`,
+          null,
+          reminderHtml(
+            fullname,
+            `This is your ${SessionReminderMinutes.FIFTEEN} minute reminder that your scheduled session with a trainee will begin in ${SessionReminderMinutes.FIFTEEN} minutes.`
+          )
+        );
+      }
     });
   });
   return sessionReminders;

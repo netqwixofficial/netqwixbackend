@@ -26,6 +26,12 @@ import { DateTime } from "luxon";
 import SMSService from "../../services/sms-service";
 import { timeZoneAbbreviations } from "../../Utils/constant";
 
+/** User schema defaults transactional email to true; treat missing prefs as enabled. */
+const wantsTransactionalEmail = (u: any) =>
+  u?.notifications?.transactional?.email !== false;
+const wantsTransactionalSms = (u: any) =>
+  u?.notifications?.transactional?.sms !== false;
+
 export class TraineeService {
   public log = log.getLogger();
 
@@ -318,91 +324,99 @@ export class TraineeService {
       const startTime = Utils.convertToAmPm(sessionObj["session_start_time"]);
       const endTime = Utils.convertToAmPm(sessionObj["session_end_time"]);
 
-      const timeZoneInShort = DateTime.now()
-        .setZone(payload.time_zone)
-        .toFormat("ZZZZ");
       const bookedTime = `${startTime} To ${endTime}`;
       const subjectTrainee = `NetQwix Training Session Booked for ${bookedDate} at ${bookedTime} ${timeZoneAbbreviations[sessionObj.time_zone] || sessionObj.time_zone}`;
-      const timeZoneInShortForTrainer = DateTime.now()
-        .setZone(trainerDetails.extraInfo.availabilityInfo.timeZone)
-        .toFormat("ZZZZ");
-      const subjectTrainer = `NetQwix Training Session Booked for ${bookedDate} at ${bookedTime} ${timeZoneAbbreviations[trainerDetails.extraInfo.availabilityInfo.timeZone] ||trainerDetails.extraInfo.availabilityInfo.timeZone}`;
+      const trainerTz =
+        trainerDetails?.extraInfo?.availabilityInfo?.timeZone ||
+        payload.time_zone ||
+        "UTC";
+      const subjectTrainer = `NetQwix Training Session Booked for ${bookedDate} at ${bookedTime} ${timeZoneAbbreviations[trainerTz] || trainerTz}`;
       
       const charging_price = `${amountType.USD}${+payload.charging_price}.`;
-      const meetingLink = process.env.FRONTEND_URL_SMS + "/meeting?id="+ sessionObj["_id"];
 
-      if (traineeDetails.notifications.transactional.email) {
+      const bookingData = await sessionObj.save();
+      const meetingLink =
+        (process.env.FRONTEND_URL_SMS || "") + "/meeting?id=" + bookingData["_id"];
 
-        SendEmail.sendRawEmail(
-          "session-booking-trainee",
-          {
-            "[TRAINEE FIRST NAME]":traineeDetails.fullname.split(" ")[0],
-            "[TRAINER NAME]":trainerDetails.fullname,
-            "[session date and time]":`${bookedDate} at ${bookedTime} ${timeZoneAbbreviations[sessionObj.time_zone] || sessionObj.time_zone}`,
-            "[MEETING_LINK]":meetingLink
-          },
-          traineeDetails.email,
-          "NetQwix Training Session is Booked",
-        );
-      }
-      if (trainerDetails.notifications.transactional.email) {
-
-        SendEmail.sendRawEmail(
-          "session-booking-trainer",
-          {
-            "[TRAINER FIRST NAME]":trainerDetails.fullname.split(" ")[0],
-            "[TRAINEE_NAME]":traineeDetails.fullname,
-            "[session date and time]":`${bookedDate} at ${bookedTime} ${timeZoneAbbreviations[trainerDetails.extraInfo.availabilityInfo.timeZone] ||trainerDetails.extraInfo.availabilityInfo.timeZone}`,
-            "[MEETING_LINK]":meetingLink
-          },
-          trainerDetails.email,
-          "NetQwix Training Session is Booked",
-        );
-      }
-
-      const smsService = new SMSService();
-      if (trainerDetails.notifications.transactional.sms) {
-
-        await smsService.sendSMS(
-          trainerDetails.mobile_no,
-          subjectTrainee + " With " + traineeDetails.fullname
-        )
-      }
-      if (traineeDetails.notifications.transactional.sms) {
-
-        await smsService.sendSMS(
-          traineeDetails.mobile_no,
-          subjectTrainer + " With " + trainerDetails.fullname
-        );
-      }
-      if (payload.status === BOOKED_SESSIONS_STATUS["BOOKED"]) {
-        if (traineeDetails.notifications.transactional.email) {
-
-          SendEmail.sendRawEmail(
-            "payment-confirmation",
-            {
-              "[First Name]":traineeDetails.fullname.split(" ")[0],
-              "[AMOUNT]":charging_price,
-              "[TRAINER NAME]":trainerDetails.fullname,
-              "[TRAINER NAME2]":trainerDetails.fullname
-            },
-            [traineeDetails.email],
-            "NetQwix Payment Confirmation",
-          );
-        }
-      }
-      var bookingData = await sessionObj.save();
       await user.updateOne(
         { _id: payload.trainer_id },
         { $inc: { wallet_amount: +payload.charging_price || 0 } }
       );
       
-      // Emit booking created event
       try {
         const { emitBookingCreated } = require("../socket/socket.service");
-        await emitBookingCreated(bookingData, 'scheduled');
+        await emitBookingCreated(bookingData, "scheduled");
       } catch (err) {
         console.error("[BOOKING] Error emitting booking created event:", err);
+      }
+
+      try {
+        if (wantsTransactionalEmail(traineeDetails)) {
+          SendEmail.sendRawEmail(
+            "session-booking-trainee",
+            {
+              "[TRAINEE FIRST NAME]": traineeDetails.fullname.split(" ")[0],
+              "[TRAINER NAME]": trainerDetails.fullname,
+              "[session date and time]": `${bookedDate} at ${bookedTime} ${timeZoneAbbreviations[sessionObj.time_zone] || sessionObj.time_zone}`,
+              "[MEETING_LINK]": meetingLink,
+            },
+            [traineeDetails.email],
+            "NetQwix Training Session is Booked"
+          );
+        }
+        if (wantsTransactionalEmail(trainerDetails)) {
+          SendEmail.sendRawEmail(
+            "session-booking-trainer",
+            {
+              "[TRAINER FIRST NAME]": trainerDetails.fullname.split(" ")[0],
+              "[TRAINEE_NAME]": traineeDetails.fullname,
+              "[session date and time]": `${bookedDate} at ${bookedTime} ${timeZoneAbbreviations[trainerTz] || trainerTz}`,
+              "[MEETING_LINK]": meetingLink,
+            },
+            [trainerDetails.email],
+            "NetQwix Training Session is Booked"
+          );
+        }
+      } catch (mailErr) {
+        console.error("[BOOKING] Session booking email failed (booking still saved):", mailErr);
+      }
+
+      const smsService = new SMSService();
+      try {
+        if (wantsTransactionalSms(trainerDetails)) {
+          await smsService.sendSMS(
+            trainerDetails.mobile_no,
+            subjectTrainee + " With " + traineeDetails.fullname
+          );
+        }
+        if (wantsTransactionalSms(traineeDetails)) {
+          await smsService.sendSMS(
+            traineeDetails.mobile_no,
+            subjectTrainer + " With " + trainerDetails.fullname
+          );
+        }
+      } catch (smsErr) {
+        console.error("[BOOKING] SMS notification failed:", smsErr);
+      }
+
+      if (payload.status === BOOKED_SESSIONS_STATUS["BOOKED"]) {
+        try {
+          if (wantsTransactionalEmail(traineeDetails)) {
+            SendEmail.sendRawEmail(
+              "payment-confirmation",
+              {
+                "[First Name]": traineeDetails.fullname.split(" ")[0],
+                "[AMOUNT]": charging_price,
+                "[TRAINER NAME]": trainerDetails.fullname,
+                "[TRAINER NAME2]": trainerDetails.fullname,
+              },
+              [traineeDetails.email],
+              "NetQwix Payment Confirmation"
+            );
+          }
+        } catch (payMailErr) {
+          console.error("[BOOKING] Payment confirmation email failed:", payMailErr);
+        }
       }
       
       return ResponseBuilder.data(bookingData, l10n.t("SESSION_BOOKED"));
@@ -479,18 +493,68 @@ export class TraineeService {
         console.error("[BOOKING] Error emitting instant booking created event:", err);
       }
 
-      const trainerDetails = await user
-        .findById(trainer_id)
-        .select({ _id: 0, fullname: 1, email: 1 });
-      if (trainerDetails?.notifications?.transactional?.email) {
-        SendEmail.sendRawEmail(
-          "meeting",
-          {
-            "{NAME}": `${trainerDetails.fullname}`,
-            "{MEETING_URL}": "https://google.com",
-          },
-          [trainerDetails.email],
-          "Instant Meeting"
+      const trainerDetails = await user.findById(trainer_id).select({
+        fullname: 1,
+        email: 1,
+        notifications: 1,
+        extraInfo: 1,
+      });
+      const traineeDetails = await user.findById(_id).select({
+        fullname: 1,
+        email: 1,
+        notifications: 1,
+        extraInfo: 1,
+      });
+      if (!trainerDetails || !traineeDetails) {
+        console.error("[BOOKING] Instant session: missing trainer or trainee user record");
+      }
+
+      const bookedDate = Utils.formattedDateMonthDateYear(booked_date);
+      const startTime = Utils.convertToAmPm(session_start_time);
+      const endTime = Utils.convertToAmPm(session_end_time);
+      const bookedTime = `${startTime} To ${endTime}`;
+      const traineeTz =
+        traineeDetails?.extraInfo?.availabilityInfo?.timeZone || "UTC";
+      const trainerTz =
+        trainerDetails?.extraInfo?.availabilityInfo?.timeZone || traineeTz;
+      const meetingLink =
+        (process.env.FRONTEND_URL_SMS || "") + "/meeting?id=" + bookingData._id;
+
+      try {
+        if (traineeDetails && wantsTransactionalEmail(traineeDetails)) {
+          SendEmail.sendRawEmail(
+            "session-booking-trainee",
+            {
+              "[TRAINEE FIRST NAME]": traineeDetails.fullname.split(" ")[0],
+              "[TRAINER NAME]": trainerDetails.fullname,
+              "[session date and time]": `${bookedDate} at ${bookedTime} ${timeZoneAbbreviations[traineeTz] || traineeTz}`,
+              "[MEETING_LINK]": meetingLink,
+            },
+            [traineeDetails.email],
+            "NetQwix Instant Session is Booked"
+          );
+        }
+        if (
+          trainerDetails &&
+          traineeDetails &&
+          wantsTransactionalEmail(trainerDetails)
+        ) {
+          SendEmail.sendRawEmail(
+            "session-booking-trainer",
+            {
+              "[TRAINER FIRST NAME]": trainerDetails.fullname.split(" ")[0],
+              "[TRAINEE_NAME]": traineeDetails.fullname,
+              "[session date and time]": `${bookedDate} at ${bookedTime} ${timeZoneAbbreviations[trainerTz] || trainerTz}`,
+              "[MEETING_LINK]": meetingLink,
+            },
+            [trainerDetails.email],
+            "NetQwix Instant Session is Booked"
+          );
+        }
+      } catch (instantMailErr) {
+        console.error(
+          "[BOOKING] Instant session email failed (booking still saved):",
+          instantMailErr
         );
       }
 
