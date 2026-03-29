@@ -456,11 +456,21 @@ export const handleSocketEvents = (socket, connections = {}) => {
       process.env.SOCKET_CONFIG,
       userInfo?.to_user
     );
-    
+
     // Track join state for timer logic - sessionId is booked_session._id
     const sessionId = userInfo?.sessionId || userInfo?.meetingId || userInfo?.lessonId;
     const accountType = socket?.user?._doc?.account_type || socket?.user?.account_type;
     const userId = socket?.user?._doc?._id || socket?.user?._id;
+
+    console.log("[VideoCall:ON_CALL_JOIN]", {
+      sessionId,
+      userId,
+      accountType,
+      peerId: userInfo?.peerId,
+      from_user: userInfo?.from_user,
+      to_user: userInfo?.to_user,
+      toUserSocketMapped: !!toUserId,
+    });
     
     if (sessionId && mongoose.isValidObjectId(sessionId)) {
       // Join the room immediately when user joins (don't wait for both parties)
