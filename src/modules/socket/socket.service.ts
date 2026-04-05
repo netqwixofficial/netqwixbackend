@@ -471,7 +471,11 @@ export const handleSocketEvents = (socket, connections = {}) => {
       to_user: userInfo?.to_user,
       toUserSocketMapped: !!toUserId,
     });
-    
+
+    // Track whether we already notified the other party inside the session block so the
+    // legacy fallback below does not fire a second time (causing duplicate ON_CALL_JOIN).
+    let notifiedViaRoom = false;
+
     if (sessionId && mongoose.isValidObjectId(sessionId)) {
       // Join the room immediately when user joins (don't wait for both parties)
       const roomName = `session:${sessionId}`;
@@ -549,7 +553,8 @@ export const handleSocketEvents = (socket, connections = {}) => {
           });
         }
         
-        // Notify the other party that someone joined (if they're connected)
+        // Notify the other party that someone joined (if they're connected).
+        // We emit exactly once here; the legacy fallback below is skipped when this fires.
         const otherSocketId = MemCache.getDetail(process.env.SOCKET_CONFIG, userInfo?.to_user);
         if (otherSocketId) {
           const otherSocket = socket.nsp.sockets.get(otherSocketId);
@@ -557,13 +562,14 @@ export const handleSocketEvents = (socket, connections = {}) => {
             // Ensure other party is also in the room
             otherSocket.join(roomName);
             // Notify them that this party joined
-            otherSocket.emit(EVENTS.VIDEO_CALL.ON_CALL_JOIN, { 
+            otherSocket.emit(EVENTS.VIDEO_CALL.ON_CALL_JOIN, {
               userInfo: {
                 ...userInfo,
                 joinedUserId: userId,
                 accountType: accountType
               }
             });
+            notifiedViaRoom = true;
             console.log(`[SESSION] Notified other party ${userInfo?.to_user} that ${userId} (${accountType}) joined session ${sessionId}`);
           }
         }
@@ -590,8 +596,9 @@ export const handleSocketEvents = (socket, connections = {}) => {
       }
     }
     
-    // Also emit to the specific user (for backward compatibility)
-    if (toUserId) {
+    // Legacy fallback: only emit if the room-based notification above didn't already fire.
+    // This prevents the double ON_CALL_JOIN that was causing duplicate PeerJS calls.
+    if (!notifiedViaRoom && toUserId) {
       socket.to(toUserId).emit(EVENTS.VIDEO_CALL.ON_CALL_JOIN, { userInfo });
     }
   });
