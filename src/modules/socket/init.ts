@@ -18,18 +18,27 @@ export class SocketInit {
     setIoInstance(io);
     
     io.use(async (socket, next) => {
-      const token = socket.handshake.query.authorization;
-      if (token) {
-        const userInfo = await this.middleware.loadSocketUser(token);
-        if (userInfo.user) {
-          this.logger.info(`User Connected --> ${userInfo?.user?._id}`);
-          socket.user = userInfo.user;
-          next();
-        } else {
-          this.logger.info(`After Connection getting ERR -> ${JSON.stringify(userInfo)}`);
-          this.logger.info(`token --- , ${JSON.stringify(token)}`);
-          socket.emit(EVENTS.ON_ERROR, { msg: JSON.stringify(userInfo.error) });
-        }
+      // Prefer handshake auth (sent in Engine.IO packet) so the WebSocket URL stays short.
+      // Long JWTs in ?authorization=... break some proxies / URL length limits.
+      const authPayload = socket.handshake.auth as { authorization?: string } | undefined;
+      const q = socket.handshake.query.authorization;
+      const queryToken = Array.isArray(q) ? q[0] : q;
+      const token = authPayload?.authorization || queryToken;
+
+      if (!token) {
+        return next(new Error("Authentication error: missing token"));
+      }
+
+      const userInfo = await this.middleware.loadSocketUser(token);
+      if (userInfo.user) {
+        this.logger.info(`User Connected --> ${userInfo?.user?._id}`);
+        socket.user = userInfo.user;
+        next();
+      } else {
+        this.logger.info(`After Connection getting ERR -> ${JSON.stringify(userInfo)}`);
+        this.logger.info(`token --- , ${JSON.stringify(token)}`);
+        socket.emit(EVENTS.ON_ERROR, { msg: JSON.stringify(userInfo.error) });
+        next(new Error("Authentication failed"));
       }
     })
     .on("connection", async (socket, request) => {
