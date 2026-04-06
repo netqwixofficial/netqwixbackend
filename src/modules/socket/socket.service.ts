@@ -1372,12 +1372,21 @@ const listenCallEndEvent = (socket) => {
 const listenPlayPauseVideoEvent = (socket) => {
   try {
     socket.on(EVENTS.ON_VIDEO_PLAY_PAUSE, async (socketReq, request) => {
-      const { userInfo } = socketReq;
-      const toUserSocketId = MemCache.getDetail(
-        process.env.SOCKET_CONFIG,
-        userInfo?.to_user
-      );
-      socket.to(toUserSocketId).emit(EVENTS.ON_VIDEO_PLAY_PAUSE, socketReq);
+      const { userInfo, sessionId } = socketReq || {};
+      // Match ON_VIDEO_SELECT / ON_VIDEO_ZOOM_PAN: session room reaches peer after reconnects
+      // when userId→socketId cache is stale (otherwise emit is a no-op).
+      if (sessionId && mongoose.isValidObjectId(sessionId)) {
+        const roomName = `session:${sessionId}`;
+        socket.to(roomName).emit(EVENTS.ON_VIDEO_PLAY_PAUSE, socketReq);
+      } else {
+        const toUserSocketId = MemCache.getDetail(
+          process.env.SOCKET_CONFIG,
+          userInfo?.to_user
+        );
+        if (toUserSocketId) {
+          socket.to(toUserSocketId).emit(EVENTS.ON_VIDEO_PLAY_PAUSE, socketReq);
+        }
+      }
     });
   } catch (err) {
     console.error(`Error while listening to play pause video event:`, err);
@@ -1387,12 +1396,19 @@ const listenPlayPauseVideoEvent = (socket) => {
 const listenVideoTimeEvent = (socket) => {
   try {
     socket.on(EVENTS.ON_VIDEO_TIME, async (socketReq, request) => {
-      const { userInfo } = socketReq;
-      const toUserSocketId = MemCache.getDetail(
-        process.env.SOCKET_CONFIG,
-        userInfo?.to_user
-      );
-      socket.to(toUserSocketId).emit(EVENTS.ON_VIDEO_TIME, socketReq);
+      const { userInfo, sessionId } = socketReq || {};
+      if (sessionId && mongoose.isValidObjectId(sessionId)) {
+        const roomName = `session:${sessionId}`;
+        socket.to(roomName).emit(EVENTS.ON_VIDEO_TIME, socketReq);
+      } else {
+        const toUserSocketId = MemCache.getDetail(
+          process.env.SOCKET_CONFIG,
+          userInfo?.to_user
+        );
+        if (toUserSocketId) {
+          socket.to(toUserSocketId).emit(EVENTS.ON_VIDEO_TIME, socketReq);
+        }
+      }
     });
   } catch (err) {
     console.error(`Error while listening to video time event:`, err);
