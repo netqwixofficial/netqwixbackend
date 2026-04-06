@@ -88,6 +88,10 @@ type LessonSessionState = {
 
 const lessonSessions: Map<string, LessonSessionState> = new Map();
 
+/** Normalize JWT / DB variants ("Trainer", "trainer", etc.) */
+const isTrainerRole = (accountType: unknown): boolean =>
+  String(accountType ?? "").toLowerCase() === "trainer";
+
 const emitLessonStateSync = (socket: any, roomName: string, session: LessonSessionState) => {
   const statePayload = {
     sessionId: session.sessionId,
@@ -149,7 +153,7 @@ async function updateUserActivity(socket) {
 
     // Add the current user to the active users list
 
-    if (socket?.user?._doc?.account_type === "Trainer") {
+    if (isTrainerRole(socket?.user?._doc?.account_type || socket?.user?.account_type)) {
       activeUsers[userId] = { ...socket.user._doc };
       if (socket.user._doc._id) {
         const checkIfUserIsAlreadyAdded = await onlineUser.findOne({
@@ -216,10 +220,10 @@ async function updateUserActivity(socket) {
       // Reset their join status but don't stop the timer if it's already started
       const accountType = socket?.user?._doc?.account_type || socket?.user?.account_type;
       for (const [sessionId, session] of lessonSessions.entries()) {
-        if (accountType === "Trainer" && session.coachJoined) {
+        if (isTrainerRole(accountType) && session.coachJoined) {
           session.coachJoined = false;
           console.log(`[TIMER] Trainer ${userId} disconnected from session ${sessionId}`);
-        } else if (accountType !== "Trainer" && session.userJoined) {
+        } else if (!isTrainerRole(accountType) && session.userJoined) {
           session.userJoined = false;
           console.log(`[TIMER] Trainee ${userId} disconnected from session ${sessionId}`);
         }
@@ -265,7 +269,7 @@ export const handleSocketEvents = (socket, connections = {}) => {
         if (session) {
           // Update join status
           let role = "trainee";
-          if (accountType === "Trainer") {
+          if (isTrainerRole(accountType)) {
             session.coachJoined = false;
             role = "trainer";
             console.log(`[SESSION] Trainer ${userId} disconnected from session ${sessionId}`);
@@ -522,9 +526,40 @@ export const handleSocketEvents = (socket, connections = {}) => {
             };
             lessonSessions.set(sessionId, session);
             console.log(`[TIMER] Session ${sessionId} initialized with duration ${session.duration}s`);
+          } else {
+            // Instant lessons / IDs not in booked_session still need in-memory timer state
+            session = {
+              sessionId,
+              coachJoined: false,
+              userJoined: false,
+              startedAt: null,
+              duration: 30 * 60,
+              remainingSeconds: 30 * 60,
+              status: "waiting",
+              warningTimeoutId: null,
+              endTimeoutId: null,
+            };
+            lessonSessions.set(sessionId, session);
+            console.log(
+              `[TIMER] Session ${sessionId} has no booking document; default duration ${session.duration}s`
+            );
           }
         } catch (err) {
           console.error("Error fetching booked session for timer:", err);
+          if (!lessonSessions.get(sessionId)) {
+            session = {
+              sessionId,
+              coachJoined: false,
+              userJoined: false,
+              startedAt: null,
+              duration: 30 * 60,
+              remainingSeconds: 30 * 60,
+              status: "waiting",
+              warningTimeoutId: null,
+              endTimeoutId: null,
+            };
+            lessonSessions.set(sessionId, session);
+          }
         }
       }
       
@@ -533,7 +568,7 @@ export const handleSocketEvents = (socket, connections = {}) => {
         const wasCoachJoined = session.coachJoined;
         const wasUserJoined = session.userJoined;
         
-        if (accountType === "Trainer") {
+        if (isTrainerRole(accountType)) {
           session.coachJoined = true;
           console.log(`[TIMER] Trainer ${userId} joined session ${sessionId}. Coach joined: ${session.coachJoined}, User joined: ${session.userJoined}`);
           socket.to(roomName).emit("PARTICIPANT_STATUS_CHANGED", {
@@ -664,7 +699,7 @@ export const handleSocketEvents = (socket, connections = {}) => {
     if (!session) return;
 
     const accountType = socket?.user?._doc?.account_type || socket?.user?.account_type;
-    if (accountType !== "Trainer") {
+    if (!isTrainerRole(accountType)) {
       socket.emit("LESSON_TIMER_ERROR", { message: "Only trainer can start lesson timer." });
       return;
     }
@@ -699,7 +734,7 @@ export const handleSocketEvents = (socket, connections = {}) => {
     if (!session || session.status !== "running" || session.startedAt == null) return;
 
     const accountType = socket?.user?._doc?.account_type || socket?.user?.account_type;
-    if (accountType !== "Trainer") {
+    if (!isTrainerRole(accountType)) {
       socket.emit("LESSON_TIMER_ERROR", { message: "Only trainer can pause lesson timer." });
       return;
     }
@@ -727,7 +762,7 @@ export const handleSocketEvents = (socket, connections = {}) => {
     if (!session || session.status !== "paused") return;
 
     const accountType = socket?.user?._doc?.account_type || socket?.user?.account_type;
-    if (accountType !== "Trainer") {
+    if (!isTrainerRole(accountType)) {
       socket.emit("LESSON_TIMER_ERROR", { message: "Only trainer can resume lesson timer." });
       return;
     }
