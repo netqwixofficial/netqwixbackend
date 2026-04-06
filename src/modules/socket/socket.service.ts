@@ -1373,19 +1373,17 @@ const listenPlayPauseVideoEvent = (socket) => {
   try {
     socket.on(EVENTS.ON_VIDEO_PLAY_PAUSE, async (socketReq, request) => {
       const { userInfo, sessionId } = socketReq || {};
-      // Match ON_VIDEO_SELECT / ON_VIDEO_ZOOM_PAN: session room reaches peer after reconnects
-      // when userId→socketId cache is stale (otherwise emit is a no-op).
-      if (sessionId && mongoose.isValidObjectId(sessionId)) {
-        const roomName = `session:${sessionId}`;
-        socket.to(roomName).emit(EVENTS.ON_VIDEO_PLAY_PAUSE, socketReq);
-      } else {
-        const toUserSocketId = MemCache.getDetail(
-          process.env.SOCKET_CONFIG,
-          userInfo?.to_user
-        );
-        if (toUserSocketId) {
-          socket.to(toUserSocketId).emit(EVENTS.ON_VIDEO_PLAY_PAUSE, socketReq);
-        }
+      const toUserSocketId = MemCache.getDetail(
+        process.env.SOCKET_CONFIG,
+        userInfo?.to_user
+      );
+      // Same as pre–session-room behavior (7035d75): prefer direct socket — this is what
+      // worked reliably when both peers were connected. If mapping is missing (reconnect),
+      // fall back to session room so the peer still receives the event when joined via ON_CALL_JOIN.
+      if (toUserSocketId) {
+        socket.to(toUserSocketId).emit(EVENTS.ON_VIDEO_PLAY_PAUSE, socketReq);
+      } else if (sessionId && mongoose.isValidObjectId(sessionId)) {
+        socket.to(`session:${sessionId}`).emit(EVENTS.ON_VIDEO_PLAY_PAUSE, socketReq);
       }
     });
   } catch (err) {
@@ -1397,17 +1395,14 @@ const listenVideoTimeEvent = (socket) => {
   try {
     socket.on(EVENTS.ON_VIDEO_TIME, async (socketReq, request) => {
       const { userInfo, sessionId } = socketReq || {};
-      if (sessionId && mongoose.isValidObjectId(sessionId)) {
-        const roomName = `session:${sessionId}`;
-        socket.to(roomName).emit(EVENTS.ON_VIDEO_TIME, socketReq);
-      } else {
-        const toUserSocketId = MemCache.getDetail(
-          process.env.SOCKET_CONFIG,
-          userInfo?.to_user
-        );
-        if (toUserSocketId) {
-          socket.to(toUserSocketId).emit(EVENTS.ON_VIDEO_TIME, socketReq);
-        }
+      const toUserSocketId = MemCache.getDetail(
+        process.env.SOCKET_CONFIG,
+        userInfo?.to_user
+      );
+      if (toUserSocketId) {
+        socket.to(toUserSocketId).emit(EVENTS.ON_VIDEO_TIME, socketReq);
+      } else if (sessionId && mongoose.isValidObjectId(sessionId)) {
+        socket.to(`session:${sessionId}`).emit(EVENTS.ON_VIDEO_TIME, socketReq);
       }
     });
   } catch (err) {
